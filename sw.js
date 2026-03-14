@@ -42,6 +42,4 @@ self.addEventListener('activate', (event) => {
     );
 });
 
-self.addEventListener('fetch', function (event) {
-    // Empty fetch handler to satisfy PWA criteria without caching
-});
+
