@@ -39,5 +39,6 @@
       "url": "manifest.json"
     }
   ],
-  "prefer_related_applications": true
+  "prefer_related_applications": true,
+  "gcm_sender_id": "103953800507"
 }

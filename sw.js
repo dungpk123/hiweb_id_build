@@ -1,28 +1,5 @@
-self.addEventListener("push", function (event) {
-    let data = {};
-    try {
-        data = event.data.json();
-    } catch (e) {
-        data = { title: "HiWeb", body: "You have a new notification." };
-    }
-
-    const options = {
-        body: data.body,
-        icon: "/pwa-192x192.png",
-        badge: "/pwa-192x192.png"
-    };
-
-    event.waitUntil(
-        self.registration.showNotification(data.title || "HiWeb", options)
-    );
-});
-
-self.addEventListener("notificationclick", function (event) {
-    event.notification.close();
-    event.waitUntil(
-        clients.openWindow("/")
-    );
-});
+// XÓA các listener "push" và "notificationclick" ở đây để Firebase SW tự quản lý
+// Firebase sẽ nhận tin nhắn qua file firebase-messaging-sw.js
 
 self.addEventListener('install', (event) => {
     // Immediately clear old SW cache if needed, but primarily skip waiting
