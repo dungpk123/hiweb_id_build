@@ -1,8 +1,6 @@
 importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js');
 
-console.log("SW: Service Worker script loading...");
-
 const firebaseConfig = {
     apiKey: "AIzaSyCsYwhMwrFahVQwUG3fbjVW7zoG7g6weLk",
     authDomain: "hiweb-c92a4.firebaseapp.com",
@@ -17,18 +15,15 @@ firebase.initializeApp(firebaseConfig);
 
 const messaging = firebase.messaging();
 
-// Quan trọng: Phải lắng nghe tin nhắn nền
 messaging.onBackgroundMessage((payload) => {
-    console.log("SW: Received background message (Data-only):", payload);
-
     const data = payload.data || {};
     const title = data.title || "Thông báo mới";
     const body = data.body || "Bạn có thông báo mới từ hệ thống";
 
     const notificationOptions = {
         body: body,
-        icon: "/assets/img/logo.png",
-        badge: "/assets/img/logo.png",
+        icon: "/assets/img/logo-small.png",
+        badge: "/assets/img/logo-small.png",
         requireInteraction: true,
         data: data
     };
@@ -38,7 +33,6 @@ messaging.onBackgroundMessage((payload) => {
 
 // Xử lý click thông báo
 self.addEventListener("notificationclick", function (event) {
-    console.log("SW: Notification clicked", event.notification.data);
     event.notification.close();
 
     event.waitUntil(
@@ -58,11 +52,9 @@ self.addEventListener("notificationclick", function (event) {
 
 // Lifecycle để cập nhật SW ngay lập tức
 self.addEventListener('install', () => {
-    console.log("SW: Installing...");
     self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-    console.log("SW: Activating...");
     event.waitUntil(clients.claim());
 });
