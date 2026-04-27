@@ -25,11 +25,7 @@
 
   <!-- Icons -->
   <link rel="icon" href="assets/img/logo-small.png" />
-  <link rel="apple-touch-icon" href="pwa-192x192.png" />
-  <link rel="apple-touch-icon" sizes="180x180" href="pwa-192x192.png" />
-  <link rel="apple-touch-icon" sizes="192x192" href="pwa-192x192.png" />
-  <link rel="apple-touch-icon" sizes="512x512" href="pwa-512x512.png" />
-  <link rel="manifest" href="manifest.json" />
+  <link rel="manifest" href="./manifest-v3.json" />
 
   <title>HiWeb.Vn</title>
   <base href="/" />
@@ -62,7 +58,24 @@
       </div>
     </div>
   </div>
-  <div id="modal-root"></div>
+  <div id="modal-root"></div>
+
+  <!-- Force clear old caches and service workers -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for (let registration of registrations) {
+          registration.unregister();
+        }
+      });
+      caches.keys().then(function(names) {
+        for (let name of names) {
+          caches.delete(name);
+        }
+      });
+    }
+  </script>
+
 </body>
 
 </html>
