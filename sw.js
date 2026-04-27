@@ -1,57 +1,39 @@
-// XÓA các listener "push" và "notificationclick" ở đây để Firebase SW tự quản lý
-// Firebase sẽ nhận tin nhắn qua file firebase-messaging-sw.js
-
-const CACHE_VERSION = 'v4';
-const CACHE_NAME = `hiweb-${CACHE_VERSION}`;
+// Version: 1.0.1 - Purge cache after PWA updates
+// Firebase SW handle push notifications separately in firebase-messaging-sw.js
 
 self.addEventListener('install', (event) => {
+    // Immediately clear old SW cache if needed, but primarily skip waiting
     self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
+    // Clear old caches
     event.waitUntil(
         caches.keys().then((cacheNames) => {
             return Promise.all(
-                cacheNames.map((cacheName) => {
-                    console.log('Deleting cache:', cacheName);
-                    return caches.delete(cacheName);
-                })
+                cacheNames.map((cacheName) => caches.delete(cacheName))
             );
         }).then(() => {
             return clients.claim();
-        }).then(() => {
-            // Notify all clients to reload
-            return self.clients.matchAll().then((clients) => {
-                clients.forEach((client) => {
-                    client.postMessage({ type: 'RELOAD_PAGE' });
-                });
-            });
         })
     );
 });
 
 self.addEventListener('fetch', (event) => {
+    // Only handle GET requests
     if (event.request.method !== 'GET') {
         return;
     }
 
     const url = new URL(event.request.url);
 
-    // Prevent caching manifest and icons - force network
-    if (url.pathname === '/manifest.json' || url.pathname.includes('pwa-') || url.pathname === '/manifest.json?v=2') {
-        event.respondWith(
-            fetch(event.request.url + '?t=' + Date.now(), {
-                cache: 'no-store',
-                headers: { 'Cache-Control': 'no-cache' }
-            }).catch(() => fetch(event.request))
-        );
-        return;
-    }
-
+    // Skip API calls and external resources
+    // Update router when reload page
     if (url.pathname.startsWith('/api/') || url.origin !== self.location.origin) {
         return;
     }
 
+    // For navigation requests (page loads), serve index.html as fallback
     if (event.request.mode === 'navigate') {
         event.respondWith(
             fetch(event.request).catch(() => {
