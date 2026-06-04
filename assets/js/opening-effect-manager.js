@@ -1,5 +1,5 @@
 if (window.openingEffectManager) {
-  console.log("Opening Effect: Script already loaded, skipping");
+  console.debug("Opening Effect: Script already loaded, skipping");
 } else {
   class OpeningEffectManager {
     constructor() {
@@ -15,6 +15,7 @@ if (window.openingEffectManager) {
         weddingDoorCurtain: "/assets/animations/opening/wedding-door-curtain.js",
         weddingdoorcurtain: "/assets/animations/opening/wedding-door-curtain.js",
       };
+      this.__version = "save-date-visible-1";
       this.currentEffect = null;
       this.shadowRoot = null;
     }
@@ -109,7 +110,9 @@ if (window.openingEffectManager) {
      * Thiết lập Shadow DOM bên trong #intro
      */
     setupShadowDOM(introEl) {
-      if (!this.shadowRoot) {
+      if (introEl.shadowRoot) {
+        this.shadowRoot = introEl.shadowRoot;
+      } else if (!this.shadowRoot || this.shadowRoot.host !== introEl) {
         this.shadowRoot = introEl.attachShadow({ mode: "open" });
       }
 
