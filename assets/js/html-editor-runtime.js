@@ -3289,6 +3289,12 @@
 
     // ── Interaction handler ───────────────────────────────────────────────────
     const isHandleTarget = (t) => !!(t.closest?.('.word-selection-handles') || isIgnoredActionEl(t));
+    const isNativeGalleryControlArrowTarget = (target) => {
+        if (!target || typeof target.closest !== 'function') return false;
+        return !!target.closest(
+            '.ladi-gallery-control-arrow-left, .ladi-gallery-control-arrow-right'
+        );
+    };
     const isGalleryLightboxControlTarget = (target) => {
         if (!target || typeof target.closest !== 'function') return false;
         const lightbox = target.closest('#galleryLightbox.active, .lightbox.active');
@@ -3304,6 +3310,7 @@
     const handleInteraction = (e) => {
         if (interactionMode === 'hand') return;
         const raw = e.target?.nodeType === 3 ? e.target.parentElement : e.target;
+        if (isNativeGalleryControlArrowTarget(raw)) return;
         if (isGalleryLightboxControlTarget(raw)) return;
         // Skip elements explicitly marked as non-editable (e.g. chrome system tabs, RSVP tabs)
         if (raw?.closest?.('[data-editor-ignore]')) return;
