@@ -102,8 +102,23 @@ if (window.openingEffectManager) {
       }
 
       this.currentEffect = effectId;
+      introEl.style.setProperty("pointer-events", "auto", "important");
       this.setupShadowDOM(introEl);
       this.loadEffectScript();
+
+      // When effect finishes (.away class), disable pointer-events so buttons become accessible
+      const awayObserver = new MutationObserver((mutations) => {
+        for (const m of mutations) {
+          if (m.type === "attributes" && m.attributeName === "class") {
+            if (introEl.classList.contains("away")) {
+              introEl.style.setProperty("pointer-events", "none", "important");
+              awayObserver.disconnect();
+              break;
+            }
+          }
+        }
+      });
+      awayObserver.observe(introEl, { attributes: true, attributeFilter: ["class"] });
     }
 
     /**
@@ -123,7 +138,7 @@ if (window.openingEffectManager) {
       :host {
         position: fixed !important;
         inset: 0 !important;
-        z-index: 99999 !important;
+        z-index: 2147483648 !important;
         background: #000 !important;
         display: flex !important;
         align-items: center !important;
@@ -205,6 +220,7 @@ if (window.openingEffectManager) {
         this.shadowRoot.innerHTML = "";
         try {
           this.shadowRoot.host?.classList?.remove("away");
+          this.shadowRoot.host?.style?.setProperty("pointer-events", "none", "important");
         } catch (e) {
           // ignore
         }

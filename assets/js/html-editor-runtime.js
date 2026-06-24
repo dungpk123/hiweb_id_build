@@ -4847,12 +4847,13 @@
                     audioElement.appendChild(sourceEl); audioElement.load();
                 }
                 if (isPlaying) {
+                    audioElement.muted = false;
                     const playPromise = audioElement.play();
                     if (playPromise !== undefined) playPromise.catch(error => {
                         console.warn('Audio autoplay failed:', error.message);
                         postMsg({ type: 'MUSIC_AUTOPLAY_FAILED', reason: error.message });
                     });
-                } else { audioElement.pause(); audioElement.currentTime = 0; }
+                } else { audioElement.pause(); audioElement.muted = true; audioElement.currentTime = 0; }
             } catch (error) { console.error('Error handling music sync:', error); postMsg({ type: 'MUSIC_SYNC_ERROR', error: error.message }); }
         }
 
