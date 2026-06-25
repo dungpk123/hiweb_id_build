@@ -106,19 +106,26 @@ if (window.openingEffectManager) {
       this.setupShadowDOM(introEl);
       this.loadEffectScript();
 
-      // When effect finishes (.away class), disable pointer-events so buttons become accessible
-      const awayObserver = new MutationObserver((mutations) => {
-        for (const m of mutations) {
-          if (m.type === "attributes" && m.attributeName === "class") {
-            if (introEl.classList.contains("away")) {
-              introEl.style.setProperty("pointer-events", "none", "important");
-              awayObserver.disconnect();
-              break;
+      // When user clicks on intro, wait 3s then reveal buttons
+      introEl.addEventListener('click', function onIntroClick() {
+        introEl.removeEventListener('click', onIntroClick);
+        setTimeout(() => {
+          introEl.classList.add('intro-done');
+          document.body?.removeAttribute('data-opening-effect');
+          const ids = ['final-bottom-bar', 'final-desktop-sidebar', 'wish-scroll-viewport'];
+          ids.forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) {
+              el.style.setProperty('opacity', '1', 'important');
+              el.style.setProperty('visibility', 'visible', 'important');
+              el.style.setProperty('pointer-events', 'auto', 'important');
             }
-          }
-        }
+          });
+          document.getElementById('final-mobile-chrome')?.querySelectorAll('[data-chrome-action], button').forEach((el) => {
+            el.style.setProperty('pointer-events', 'auto', 'important');
+          });
+        }, 3000);
       });
-      awayObserver.observe(introEl, { attributes: true, attributeFilter: ["class"] });
     }
 
     /**
@@ -216,14 +223,25 @@ if (window.openingEffectManager) {
 
     cleanup() {
       // Clear shadow DOM completely
+      const introEl = this.shadowRoot?.host || document.getElementById("intro");
       if (this.shadowRoot) {
         this.shadowRoot.innerHTML = "";
         try {
           this.shadowRoot.host?.classList?.remove("away");
+          this.shadowRoot.host?.classList?.add("intro-done");
           this.shadowRoot.host?.style?.setProperty("pointer-events", "none", "important");
+          this.shadowRoot.host?.removeAttribute("data-opening-preview");
+          this.shadowRoot.host?.removeAttribute("data-opening-preview-nonce");
         } catch (e) {
           // ignore
         }
+      }
+
+      if (introEl) {
+        introEl.classList?.add("intro-done");
+        introEl.style?.setProperty("pointer-events", "none", "important");
+        introEl.removeAttribute?.("data-opening-preview");
+        introEl.removeAttribute?.("data-opening-preview-nonce");
       }
 
       // Remove old scripts

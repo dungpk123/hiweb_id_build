@@ -214,6 +214,10 @@
                 mediaEl.removeAttribute('autoplay');
                 mediaEl.autoplay = false;
                 mediaEl.pause?.();
+                if (typeof mediaEl.currentTime === 'number') {
+                    try { mediaEl.currentTime = 0; } catch (_) {}
+                }
+                mediaEl.classList?.remove('playing', 'is-playing');
             });
             const musicBtn = document.getElementById('musicToggle') || document.getElementById('music-toggle') || document.querySelector('.music-btn');
             const musicIcon = document.querySelector('.music-icon');
@@ -4838,22 +4842,29 @@
                     }
                 }
             }
-            let audioElement = document.getElementById('bgMusic') || document.getElementById('background-music');
-            if (!audioElement) { audioElement = document.createElement('audio'); audioElement.id = 'bgMusic'; audioElement.style.display = 'none'; document.body.appendChild(audioElement); }
+            let audioElement =
+                document.getElementById('hiweb-background-music') ||
+                document.getElementById('bgMusic') ||
+                document.getElementById('background-music');
+            if (!audioElement) {
+                audioElement = document.createElement('audio');
+                audioElement.id = 'hiweb-background-music';
+                audioElement.style.display = 'none';
+                audioElement.muted = true;
+                audioElement.loop = true;
+                document.body.appendChild(audioElement);
+            }
             try {
                 if (src) {
                     Array.from(audioElement.querySelectorAll('source')).forEach(s => s.remove());
                     const sourceEl = document.createElement('source'); sourceEl.src = src; sourceEl.type = 'audio/mpeg';
                     audioElement.appendChild(sourceEl); audioElement.load();
                 }
-                if (isPlaying) {
-                    audioElement.muted = false;
-                    const playPromise = audioElement.play();
-                    if (playPromise !== undefined) playPromise.catch(error => {
-                        console.warn('Audio autoplay failed:', error.message);
-                        postMsg({ type: 'MUSIC_AUTOPLAY_FAILED', reason: error.message });
-                    });
-                } else { audioElement.pause(); audioElement.muted = true; audioElement.currentTime = 0; }
+                audioElement.removeAttribute('autoplay');
+                audioElement.muted = true;
+                audioElement.pause();
+                audioElement.currentTime = 0;
+                audioElement.classList.remove('playing', 'is-playing');
             } catch (error) { console.error('Error handling music sync:', error); postMsg({ type: 'MUSIC_SYNC_ERROR', error: error.message }); }
         }
 
@@ -4863,11 +4874,16 @@
                 const { url, title, artist, iconUrl, iconId, iconColor, autoplay } = data.music;
 
                 // Update audio element
-                let audioElement = document.getElementById('bgMusic') || document.getElementById('background-music');
+                let audioElement =
+                    document.getElementById('hiweb-background-music') ||
+                    document.getElementById('bgMusic') ||
+                    document.getElementById('background-music');
                 if (!audioElement) {
                     audioElement = document.createElement('audio');
-                    audioElement.id = 'bgMusic';
+                    audioElement.id = 'hiweb-background-music';
                     audioElement.style.display = 'none';
+                    audioElement.muted = true;
+                    audioElement.loop = true;
                     document.body.appendChild(audioElement);
                 }
 
@@ -4883,8 +4899,11 @@
                     // Set metadata attributes
                     if (title) audioElement.setAttribute('data-title', title);
                     if (artist) audioElement.setAttribute('data-artist', artist);
-                    if (autoplay) audioElement.setAttribute('autoplay', 'autoplay');
-                    else audioElement.removeAttribute('autoplay');
+                    audioElement.removeAttribute('autoplay');
+                    audioElement.pause();
+                    audioElement.muted = true;
+                    audioElement.currentTime = 0;
+                    audioElement.classList.remove('playing', 'is-playing');
                 }
 
                 // Update music icon if exists
