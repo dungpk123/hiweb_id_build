@@ -52,7 +52,7 @@
     particle.className = "fall-particle";
     
     var left = Math.random() * 100;
-    var duration = 6 + Math.random() * 6; 
+    var duration = (Number(effectConfig.speed) || 8) + Math.random() * 4;
     var size = 10 + Math.random() * 15; 
     var color = colors[Math.floor(Math.random() * colors.length)];
     var delay = Math.random() * 5;

@@ -73,7 +73,7 @@
     return (min + Math.random() * (max - min)).toFixed(1) + "px";
   }
 
-  function createParticle() {
+  function createParticle(isInitial) {
     var maxCount = Number(effectConfig.maxCount) || 48;
     if (particles.length >= maxCount) return;
 
@@ -82,7 +82,7 @@
 
     var size = 4 + Math.random() * 6;
     var duration = (Number(effectConfig.speed) || 18) + Math.random() * 10;
-    var delay = Math.random() * 4;
+    var delay = isInitial ? -(Math.random() * duration) : Math.random() * 4;
     var swayBase = Number(effectConfig.sway) || 8;
     var sway = (Math.random() * 30 + swayBase * 4).toFixed(1) + "px";
     var opacity = (0.48 + Math.random() * 0.42).toFixed(2);
@@ -118,12 +118,12 @@
   function init() {
     var initialCount = Number(effectConfig.count) || 26;
     for (var i = 0; i < initialCount; i += 1) {
-      createParticle();
+      createParticle(true);
     }
 
     var interval = setInterval(function () {
       if (document.visibilityState === "visible") {
-        createParticle();
+        createParticle(false);
       }
     }, Number(effectConfig.spawnInterval) || 850);
 

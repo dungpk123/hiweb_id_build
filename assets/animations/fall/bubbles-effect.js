@@ -53,7 +53,7 @@
   var bubbles = [];
   var pendingTimeouts = [];
 
-  function createBubble() {
+  function createBubble(isInitial) {
     var maxCount = Number(effectConfig.maxCount) || 34;
     if (bubbles.length >= maxCount) return;
 
@@ -62,7 +62,7 @@
 
     var size = 14 + Math.random() * 36;
     var duration = (Number(effectConfig.speed) || 14) + Math.random() * 9;
-    var delay = Math.random() * 4;
+    var delay = isInitial ? -(Math.random() * duration) : Math.random() * 4;
     var drift = (Math.random() * 90 - 45).toFixed(1) + "px";
     var swayBase = Number(effectConfig.sway) || 5;
     var sway = (Math.random() * 28 + swayBase * 4).toFixed(1) + "px";
@@ -95,12 +95,12 @@
   function init() {
     var initialCount = Number(effectConfig.count) || 18;
     for (var i = 0; i < initialCount; i += 1) {
-      createBubble();
+      createBubble(true);
     }
 
     var interval = setInterval(function () {
       if (document.visibilityState === "visible") {
-        createBubble();
+        createBubble(false);
       }
     }, Number(effectConfig.spawnInterval) || 1200);
 

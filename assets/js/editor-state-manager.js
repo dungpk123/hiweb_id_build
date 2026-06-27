@@ -39,7 +39,6 @@
     /** Temporary class names added by the editor — excluded from snapshots */
     const TEMP_CLASSES = new Set(['selected', 'editing', 'editor-effect-target']);
 
-    const MAX_STACK_SIZE = 50;
     const DEBOUNCE_DELAY = 300;
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -61,17 +60,6 @@
         return sel ? Array.from(document.querySelectorAll(sel)) : [];
     }
 
-    /** Fast, non-cryptographic hash for change detection — avoids full JSON.stringify compare. */
-    function quickHash(obj) {
-        const str = JSON.stringify(obj);
-        let h = 0x811c9dc5;
-        for (let i = 0; i < str.length; i++) {
-            h ^= str.charCodeAt(i);
-            h = (h * 0x01000193) >>> 0;
-        }
-        return h;
-    }
-
     /** Simple debounce — returns { call, cancel }. */
     function debounce(fn, delay) {
         let timer = null;
@@ -88,14 +76,21 @@
 
     class EditorStateManager {
         constructor() {
-            this.undoStack = [];
-            this.redoStack = [];
-            // this.maxStackSize = 50;
-            // this.debounceTimer = null;
-            // this.debounceDelay = 300; // ms
-
-            this._lastHash = null;
-
+            const historyFactory = window.createEditorHistoryManager;
+            const historyCtor = window.EditorHistoryManager;
+            this.history = typeof historyFactory === 'function'
+                ? historyFactory()
+                : (typeof historyCtor === 'function'
+                    ? new historyCtor()
+                    : {
+                        pushSnapshot: () => false,
+                        pushElementSnapshot: () => false,
+                        undo: () => null,
+                        redo: () => null,
+                        clear: () => {},
+                        reset: () => {},
+                        getStackInfo: () => ({ canUndo: false, canRedo: false, undoCount: 0, redoCount: 0 }),
+                    });
             const deb = debounce(() => this.saveState(), DEBOUNCE_DELAY);
             this._debouncedSave = deb.call.bind(deb);
             this._cancelDebounce = deb.cancel.bind(deb);
@@ -184,6 +179,8 @@
         // ── Undo / Redo ───────────────────────────────────────────────────────
 
         saveStateDebounced() { this._debouncedSave(); }
+        clearHistory() { this.history?.clear?.(); }
+        resetHistory(initialHistory = []) { this.history?.reset?.(initialHistory); }
 
         // ── Element-level save (recommended for normal editing) ────────────────
         saveElementState(el) {
@@ -191,72 +188,53 @@
             const elementState = this.captureElementState(el);
             if (!elementState) return;
 
-            const hash = quickHash(elementState);
-            if (hash === this._lastHash) return;
-
-            this._lastHash = hash;
-            this.undoStack.push({ __element: true, el, state: elementState });
-            if (this.undoStack.length > MAX_STACK_SIZE) this.undoStack.shift();
-            this.redoStack = [];
-            console.log(`[StateManager] element saved — undo: ${this.undoStack.length}`);
+            if (!this.history.pushElementSnapshot(el, elementState)) return;
+            const stackInfo = this.history.getStackInfo();
+            console.log(`[StateManager] element saved — undo: ${stackInfo.undoCount}`);
         }
 
         saveState() {
             const state = this.captureCurrentState();
-            const hash = quickHash(state);
-
-            if (hash === this._lastHash) return;
-            this._lastHash = hash;
-
-            this.undoStack.push(state);
-            if (this.undoStack.length > MAX_STACK_SIZE) this.undoStack.shift();
-            this.redoStack = [];
-
-            console.log(`[StateManager] saved — undo: ${this.undoStack.length}`);
+            if (!this.history.pushSnapshot(state)) return;
+            const stackInfo = this.history.getStackInfo();
+            console.log(`[StateManager] saved — undo: ${stackInfo.undoCount}`);
         }
 
         undo() {
-            if (!this.undoStack.length) { console.log('[StateManager] nothing to undo'); return false; }
-
-            const last = this.undoStack.pop();
-            this.redoStack.push(this.captureCurrentState());
+            const last = this.history.undo();
+            if (!last) { console.log('[StateManager] nothing to undo'); return false; }
 
             if (last && last.__element) {
                 // Element-level undo (much safer, no layout breakage)
-                const targetEl = last.el || document.querySelector(`[data-editor-id="${last.state.id}"]`);
+                const targetEl = last.el || queryById(last.state.id)[0] || document.querySelector(`[data-editor-id="${last.state.id}"]`);
                 this.applyElementState(targetEl, last.state);
             } else {
                 this.applyState(last);
             }
 
-            console.log(`[StateManager] undo — undo: ${this.undoStack.length}, redo: ${this.redoStack.length}`);
+            const stackInfo = this.history.getStackInfo();
+            console.log(`[StateManager] undo — undo: ${stackInfo.undoCount}, redo: ${stackInfo.redoCount}`);
             return true;
         }
 
         redo() {
-            if (!this.redoStack.length) { console.log('[StateManager] nothing to redo'); return false; }
-
-            const last = this.redoStack.pop();
-            this.undoStack.push(this.captureCurrentState());
+            const last = this.history.redo();
+            if (!last) { console.log('[StateManager] nothing to redo'); return false; }
 
             if (last && last.__element) {
-                const targetEl = last.el || document.querySelector(`[data-editor-id="${last.state.id}"]`);
+                const targetEl = last.el || queryById(last.state.id)[0] || document.querySelector(`[data-editor-id="${last.state.id}"]`);
                 this.applyElementState(targetEl, last.state);
             } else {
                 this.applyState(last);
             }
 
-            console.log(`[StateManager] redo — undo: ${this.undoStack.length}, redo: ${this.redoStack.length}`);
+            const stackInfo = this.history.getStackInfo();
+            console.log(`[StateManager] redo — undo: ${stackInfo.undoCount}, redo: ${stackInfo.redoCount}`);
             return true;
         }
 
         getStackInfo() {
-            return {
-                canUndo: this.undoStack.length > 0,
-                canRedo: this.redoStack.length > 0,
-                undoCount: this.undoStack.length,
-                redoCount: this.redoStack.length,
-            };
+            return this.history.getStackInfo();
         }
 
         // ── LocalStorage ──────────────────────────────────────────────────────

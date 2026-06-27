@@ -70,7 +70,7 @@
   var particles = [];
   var pendingTimeouts = [];
 
-  function createParticle() {
+  function createParticle(isInitial) {
     var maxCount = Number(effectConfig.maxCount) || 44;
     if (particles.length >= maxCount) return;
 
@@ -79,7 +79,7 @@
 
     var size = 3 + Math.random() * 7;
     var duration = (Number(effectConfig.speed) || 16) + Math.random() * 10;
-    var delay = Math.random() * 5;
+    var delay = isInitial ? -(Math.random() * duration) : Math.random() * 5;
     var swayBase = Number(effectConfig.sway) || 6;
     var drift = (Math.random() * 110 - 55).toFixed(1) + "px";
     var sway = (Math.random() * 22 + swayBase * 3).toFixed(1) + "px";
@@ -116,12 +116,12 @@
   function init() {
     var initialCount = Number(effectConfig.count) || 24;
     for (var i = 0; i < initialCount; i += 1) {
-      createParticle();
+      createParticle(true);
     }
 
     var interval = setInterval(function () {
       if (document.visibilityState === "visible") {
-        createParticle();
+        createParticle(false);
       }
     }, Number(effectConfig.spawnInterval) || 900);
 

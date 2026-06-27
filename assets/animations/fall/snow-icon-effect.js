@@ -52,7 +52,7 @@
     var snowflake = document.createElement("div");
     snowflake.innerHTML = snowSVGPath;
     var svgElement = snowflake.firstChild;
-    
+
     // Thuộc tính ngẫu nhiên
     var size = 10 + Math.random() * 12; // Kích thước nhỏ xinh
     var left = Math.random() * 100;
@@ -63,7 +63,7 @@
     svgElement.style.width = size + "px";
     svgElement.style.left = left + "%";
     svgElement.style.opacity = opacity;
-    
+
     // Animation kết hợp rơi và dạt sang ngang (drift)
     svgElement.style.animation = `
       snow-gentle-fall ${duration}s linear ${delay}s infinite,
@@ -80,7 +80,7 @@
       }
       snowflakes = snowflakes.filter(s => s !== svgElement);
     }, (duration + delay) * 1000);
-    
+
     pendingTimeouts.push(timeoutId);
   }
 

@@ -1273,6 +1273,71 @@
         return EDITABLE_ATTRS.reduce((acc, a) => acc || el.getAttribute(a), '') || '';
     };
 
+    const getNodePath = (node) => {
+        const path = [];
+        let cur = node;
+        while (cur && cur !== document.body && cur !== document.documentElement) {
+            const parent = cur.parentElement;
+            if (!parent) break;
+            path.unshift(Array.from(parent.children).indexOf(cur));
+            cur = parent;
+        }
+        return path;
+    };
+
+    const getNodeFromPath = (path = []) => {
+        let cur = document.body;
+        for (const index of path) {
+            if (!cur?.children || index < 0 || index >= cur.children.length) return null;
+            cur = cur.children[index];
+        }
+        return cur || null;
+    };
+
+    const createNodeFromHtml = (html) => {
+        if (!html) return null;
+        const tpl = document.createElement('template');
+        tpl.innerHTML = String(html).trim();
+        return tpl.content.firstElementChild || null;
+    };
+
+    const captureStructuralNodeState = (node) => {
+        if (!node) return null;
+        return {
+            op: 'insert',
+            id: getEditableId(node),
+            html: node.outerHTML || '',
+            parentPath: getNodePath(node.parentElement || document.body),
+            nextSiblingId: getEditableId(node.nextElementSibling) || '',
+        };
+    };
+
+    const removeEditableNodeById = (id) => {
+        const node = findEditableById(id);
+        if (node?.parentNode) {
+            node.parentNode.removeChild(node);
+            return true;
+        }
+        return false;
+    };
+
+    const insertStructuralNode = (snapshot) => {
+        if (!snapshot || !snapshot.html) return null;
+        const node = createNodeFromHtml(snapshot.html);
+        if (!node) return null;
+
+        const parent = getNodeFromPath(snapshot.parentPath) || document.body;
+        const reference = snapshot.nextSiblingId ? findEditableById(snapshot.nextSiblingId) : null;
+
+        if (reference?.parentNode === parent) {
+            parent.insertBefore(node, reference);
+        } else {
+            parent.appendChild(node);
+        }
+
+        return node;
+    };
+
     const queryEditableAll = (id) => {
         if (!id) return [];
         try {
@@ -2207,14 +2272,14 @@
                 // Cloned element starts unlocked regardless of parent lock state
                 clone.removeAttribute('data-locked');
                 clone.classList.remove('editor-element-locked');
-                const beforeState = window.editorStateManager?.captureCurrentState();
                 // Insert clone BEFORE original so it appears at the same visual position
                 element.parentNode.insertBefore(clone, element);
                 saveElementTransform(newId, clone.style.transform || '');
                 saveTextContentToStorage(false); // Lưu trạng thái văn bản mới vào session
                 clearEditing(); showSelectionHandles(clone); clone.classList.add('editing');
 
-                const afterState = window.editorStateManager?.captureCurrentState();
+                const beforeState = { op: 'remove', id: newId };
+                const afterState = captureStructuralNodeState(clone);
                 postMsg({
                     type: 'COMMIT_COMMAND',
                     command: {
@@ -2228,9 +2293,6 @@
                 postMsg({ type: 'ELEMENT_DUPLICATED', oldId, id: newId, tab });
                 postMsg({ type: 'FOCUS_FIELD', id: newId, tab });
 
-                if (window.editorStateManager) {
-                    window.editorStateManager.saveStateDebounced();
-                }
             };
 
             // ── Delete handle ────────────────────────────────────────────
@@ -2249,10 +2311,10 @@
                 showConfirmModal({
                     title: 'Xóa phần tử?', message: 'Bạn có chắc muốn xoá phần tử này?', confirmText: 'Xóa', cancelText: 'Hủy',
                     onConfirm: () => {
-                        const beforeState = window.editorStateManager?.captureCurrentState();
                         const id = getEditableId(element);
+                        const beforeState = captureStructuralNodeState(element);
                         element?.parentNode?.removeChild(element);
-                        const afterState = window.editorStateManager?.captureCurrentState();
+                        const afterState = { op: 'remove', id };
                         hideSelectionHandles();
 
                         postMsg({
@@ -2266,9 +2328,6 @@
                         });
                         postMsg({ type: 'DELETE_ELEMENT', id });
 
-                        if (window.editorStateManager) {
-                            window.editorStateManager.saveStateDebounced();
-                        }
                     }
                 });
             };
@@ -2407,7 +2466,7 @@
                 const state = window.editorStateManager.loadFromLocalStorage(currentScope);
                 if (state) {
                     console.log('[Apply Transforms] Loading from EditorStateManager');
-                    window.editorStateManager.applyState(state);
+                    withHistorySuspended(() => window.editorStateManager.applyState(state));
                     return; // Exit early if EditorStateManager succeeded
                 } else {
                     console.log('[Apply Transforms] No saved state found for this scope, using clean template');
@@ -2604,7 +2663,18 @@
         return result;
     };
 
+    const withHistorySuspended = (fn) => {
+        const prev = window.__htmlEditorHistoryApplying === true;
+        window.__htmlEditorHistoryApplying = true;
+        try {
+            return fn();
+        } finally {
+            window.__htmlEditorHistoryApplying = prev;
+        }
+    };
+
     const emitActionsSnapshot = (force) => {
+        if (window.__htmlEditorHistoryApplying) return;
         const actions = collectAllActions();
         const fp = actions.map(a => [a.type, a.event, a.selector, a.function, a.url, a.code].join('||')).join('###');
         if (!force && fp === lastActionsFingerprint) return;
@@ -4044,7 +4114,7 @@
                     try {
                         const state = window.editorStateManager.loadFromLocalStorage(data.scope);
                         if (state) {
-                            window.editorStateManager.applyState(state);
+                            withHistorySuspended(() => window.editorStateManager.applyState(state));
                             console.log('[Scope] loaded saved state for scope:', data.scope.key);
                         }
                     } catch (e) {
@@ -4072,7 +4142,22 @@
             if (ctxAction === 'delete' && ctxId) {
                 showConfirmModal({
                     title: 'Xóa phần tử', message: 'Bạn có chắc muốn xóa phần tử này?', confirmText: 'Xóa', cancelText: 'Hủy',
-                    onConfirm: () => { const dom = findEditableById(ctxId); if (dom?.parentNode) dom.parentNode.removeChild(dom); postMsg({ type: 'DELETE_ELEMENT', id: ctxId }); }
+                    onConfirm: () => {
+                        const dom = findEditableById(ctxId);
+                        if (!dom?.parentNode) return;
+                        const beforeState = captureStructuralNodeState(dom);
+                        dom.parentNode.removeChild(dom);
+                        postMsg({
+                            type: 'COMMIT_COMMAND',
+                            command: {
+                                type: 'DELETE',
+                                elementId: ctxId,
+                                before: beforeState,
+                                after: { op: 'remove', id: ctxId }
+                            }
+                        });
+                        postMsg({ type: 'DELETE_ELEMENT', id: ctxId });
+                    }
                 });
             } else if (ctxAction === 'link' && ctxId) {
                 const dom = findEditableById(ctxId);
@@ -4293,7 +4378,7 @@
                     const scope = data.scope || { key: 'default' };
                     const state = window.editorStateManager.loadFromLocalStorage(scope);
                     if (state) {
-                        window.editorStateManager.applyState(state);
+                        withHistorySuspended(() => window.editorStateManager.applyState(state));
                         success = true;
                         console.log('[Load] EditorStateManager loaded and applied state');
                     } else {
@@ -4356,7 +4441,6 @@
         }
 
         if (data.type === 'ADD_EDITABLE_FIELD' && data.id) {
-            const beforeState = window.editorStateManager?.captureCurrentState();
             const span = document.createElement('span');
             span.setAttribute('data-editable', data.id);
             span.setAttribute('data-editor-id', data.id); // Also set editor-id for better tracking
@@ -4409,7 +4493,8 @@
             before ? parent.insertBefore(span, before) : parent.appendChild(span);
             saveTextContentToStorage(false); // Lưu văn bản mới thêm vào session
 
-            const afterState = window.editorStateManager?.captureCurrentState();
+            const beforeState = { op: 'remove', id: data.id };
+            const afterState = captureStructuralNodeState(span);
             postMsg({
                 type: 'COMMIT_COMMAND',
                 command: {
@@ -4426,7 +4511,6 @@
         }
 
         if (data.type === 'ADD_EDITABLE_IMAGE' && data.id) {
-            const beforeState = window.editorStateManager?.captureCurrentState();
             const img = document.createElement('img');
             img.setAttribute('data-image-editable', data.id);
             img.setAttribute('src', data.value || ''); img.setAttribute('alt', data.id);
@@ -4457,7 +4541,8 @@
             }
             before ? parent.insertBefore(img, before) : parent.appendChild(img);
 
-            const afterState = window.editorStateManager?.captureCurrentState();
+            const beforeState = { op: 'remove', id: data.id };
+            const afterState = captureStructuralNodeState(img);
             postMsg({
                 type: 'COMMIT_COMMAND',
                 command: {
@@ -4970,7 +5055,10 @@
     }).observe(document.body);
 
     // ── MutationObserver for actions ──────────────────────────────────────────
-    new MutationObserver(() => emitActionsSnapshot(false)).observe(document.documentElement || document.body, {
+    new MutationObserver(() => {
+        if (window.__htmlEditorHistoryApplying) return;
+        emitActionsSnapshot(false);
+    }).observe(document.documentElement || document.body, {
         subtree: true, childList: true, attributes: true,
         attributeFilter: ['onclick', 'onchange', 'oninput', 'onsubmit', 'href', 'action']
     });
@@ -4983,14 +5071,16 @@
     if (window.editorStateManager && window.__htmlEditorScope && window.__htmlEditorScope.key) {
         try {
             console.log('[Init] Attempting to load state from EditorStateManager with scope:', window.__htmlEditorScope.key);
-            const state = window.editorStateManager.loadFromLocalStorage(window.__htmlEditorScope);
-            if (state) {
-                console.log('[Init] Found saved state, applying...');
-                window.editorStateManager.applyState(state, true);
-                console.log('[Init] State applied successfully');
-            } else {
-                console.log('[Init] No saved state found for this scope, using clean template');
-            }
+            withHistorySuspended(() => {
+                const state = window.editorStateManager.loadFromLocalStorage(window.__htmlEditorScope);
+                if (state) {
+                    console.log('[Init] Found saved state, applying...');
+                    window.editorStateManager.applyState(state, true);
+                    console.log('[Init] State applied successfully');
+                } else {
+                    console.log('[Init] No saved state found for this scope, using clean template');
+                }
+            });
         } catch (e) {
             console.warn('[Init] Failed to load state from EditorStateManager:', e);
         }
@@ -5022,27 +5112,36 @@
 
             const stateToApply = data.direction === 'undo' ? cmd.before : cmd.after;
             if (stateToApply && window.editorStateManager) {
-                // Structural changes MUST use applyState even if elementId is present
-                const isStructural = ['CANVAS_SNAPSHOT', 'DELETE', 'DUPLICATE', 'ADD', 'ADD_IMAGE'].includes(cmd.type);
+                withHistorySuspended(() => {
+                    const isStructural = ['DELETE', 'DUPLICATE', 'ADD', 'ADD_IMAGE'].includes(cmd.type);
 
-                if (isStructural) {
-                    // Full structural restore from snapshot
-                    window.editorStateManager.applyState(stateToApply);
+                    if (isStructural) {
+                        if (stateToApply.op === 'remove') {
+                            removeEditableNodeById(stateToApply.id);
+                            hideSelectionHandles();
+                        } else if (stateToApply.op === 'insert') {
+                            const inserted = insertStructuralNode(stateToApply);
+                            if (inserted && currentSelectedImage === inserted) {
+                                updateHandlesRect(inserted);
+                                showSelectionHandles(inserted);
+                            }
+                        }
+                    } else if (cmd.type === 'CANVAS_SNAPSHOT' || cmd.type.startsWith('CANVAS_')) {
+                        window.editorStateManager.applyState(stateToApply);
+                        hideSelectionHandles();
+                    } else if (cmd.elementId) {
+                        const el = findEditableById(cmd.elementId);
+                        if (el) {
+                            window.editorStateManager.applyElementState(el, stateToApply);
 
-                    // Clear selection handles after full restore
-                    hideSelectionHandles();
-                } else if (cmd.elementId) {
-                    const el = findEditableById(cmd.elementId);
-                    if (el) {
-                        window.editorStateManager.applyElementState(el, stateToApply);
-
-                        // Update handles if the applied element is selected
-                        if (currentSelectedImage === el) {
-                            updateHandlesRect(el);
-                            showSelectionHandles(el);
+                            // Update handles if the applied element is selected
+                            if (currentSelectedImage === el) {
+                                updateHandlesRect(el);
+                                showSelectionHandles(el);
+                            }
                         }
                     }
-                }
+                });
 
                 // Signal back to parent that application is complete
                 postMsg({
