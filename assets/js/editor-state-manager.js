@@ -60,6 +60,87 @@
         return sel ? Array.from(document.querySelectorAll(sel)) : [];
     }
 
+    function getVisualImageTarget(el) {
+        if (!el) return null;
+        const preciseSelector =
+            '.ladi-image-background, .ladi-gallery-view-item, .ladi-button-background, ' +
+            '.ladi-section-background, img, image, picture, video, iframe';
+        const fallbackSelector = '.ladi-image, .ladi-box';
+
+        if (el.matches?.(preciseSelector) || el.matches?.(fallbackSelector)) return el;
+        return el.querySelector?.(preciseSelector) || el.querySelector?.(fallbackSelector) || el;
+    }
+
+    function getVisualImageSource(el) {
+        const target = getVisualImageTarget(el);
+        if (!target) return '';
+        const extractUrl = (value) => {
+            const match = String(value || '').match(/url\(['"]?([^'"]+)['"]?\)/i);
+            return match ? match[1] : String(value || '').trim();
+        };
+
+        if (target.tagName === 'IMG') {
+            return String(
+                target.getAttribute('src') ||
+                target.getAttribute('data-src') ||
+                target.currentSrc ||
+                ''
+            ).trim();
+        }
+
+        if (target.tagName === 'IMAGE') {
+            return String(
+                target.getAttribute('href') ||
+                target.getAttribute('xlink:href') ||
+                target.getAttribute('src') ||
+                target.getAttribute('data-src') ||
+                ''
+            ).trim();
+        }
+
+        const inline = String(target.style?.backgroundImage || '').trim();
+        if (inline && inline !== 'none') return extractUrl(inline);
+
+        const computed = window.getComputedStyle ? window.getComputedStyle(target) : null;
+        const computedBg = String(computed?.backgroundImage || '').trim();
+        return computedBg && computedBg !== 'none' ? extractUrl(computedBg) : '';
+    }
+
+    function captureVisualTargetStyles(target) {
+        if (!target) return null;
+        const computed = window.getComputedStyle ? window.getComputedStyle(target) : null;
+        const props = [
+            'backgroundImage',
+            'backgroundPosition',
+            'backgroundSize',
+            'backgroundRepeat',
+            'borderRadius',
+            'clipPath',
+            'maskImage',
+            'maskSize',
+            'maskPosition',
+            'maskRepeat',
+            'WebkitMaskImage',
+            'WebkitMaskSize',
+            'WebkitMaskPosition',
+            'WebkitMaskRepeat',
+            'objectFit',
+            'objectPosition',
+            'transform',
+            'transformOrigin',
+            'opacity',
+            'filter',
+            'width',
+            'height',
+        ];
+        const styles = {};
+        props.forEach((prop) => {
+            const value = String(target.style?.[prop] || computed?.[prop] || '').trim();
+            if (value) styles[prop] = value;
+        });
+        return Object.keys(styles).length ? styles : null;
+    }
+
     /** Simple debounce — returns { call, cancel }. */
     function debounce(fn, delay) {
         let timer = null;
@@ -316,9 +397,17 @@
             const nested = [];
             el.querySelectorAll('*').forEach(node => {
                 const cssText = node.style?.cssText || '';
-                const src = node.tagName === 'IMG' ? (node.getAttribute('src') || '') : '';
-                if (!cssText && !src) return;
-                nested.push({ path: this._relativePath(el, node), cssText, ...(src ? { src } : {}) });
+                const src = node.tagName === 'IMG'
+                    ? (node.getAttribute('src') || node.currentSrc || '')
+                    : '';
+                const visualStyles = captureVisualTargetStyles(node);
+                if (!cssText && !src && !visualStyles) return;
+                nested.push({
+                    path: this._relativePath(el, node),
+                    cssText,
+                    ...(src ? { src } : {}),
+                    ...(visualStyles ? { visualStyles } : {}),
+                });
             });
             return nested;
         }
@@ -327,10 +416,8 @@
             if (el.tagName === 'IMG') return String(el.src || '');
 
             if (el.hasAttribute('data-image-editable')) {
-                const childImg = el.querySelector('img');
-                if (childImg) return childImg.src || '';
-                const m = (el.style.backgroundImage || '').match(/url\(['"]?([^'"]+)['"]?\)/);
-                return m ? m[1] : '';
+                const source = getVisualImageSource(el);
+                if (source) return source;
             }
 
             if (el.hasAttribute('data-editable') || el.hasAttribute('data-editor-id')) {
@@ -427,11 +514,16 @@
 
             // Nested child styles
             if (Array.isArray(css.nested)) {
-                css.nested.forEach(({ path, cssText, src }) => {
+                css.nested.forEach(({ path, cssText, src, visualStyles }) => {
                     const node = this._resolveRelativePath(el, path);
                     if (!node?.style) return;
                     if (cssText) node.style.cssText = cssText;
                     if (src && node.tagName === 'IMG') node.setAttribute('src', src);
+                    if (visualStyles) {
+                        Object.entries(visualStyles).forEach(([prop, value]) => {
+                            try { node.style[prop] = value; } catch (_) { /* skip unsupported */ }
+                        });
+                    }
                 });
             }
         }
@@ -445,13 +537,19 @@
             }
 
             if (el.hasAttribute('data-image-editable')) {
-                const childImg = el.querySelector('img');
-                if (childImg) {
-                    childImg.src = String(content || '');
+                const target = getVisualImageTarget(el);
+                const value = String(content || '');
+                if (!target) return;
+
+                if (target.tagName === 'IMG') {
+                    target.src = value;
+                } else if (target.tagName === 'IMAGE') {
+                    target.setAttribute('href', value);
+                    target.setAttribute('xlink:href', value);
+                    target.setAttribute('src', value);
                 } else {
-                    const safe = String(content || '');
-                    el.style.backgroundImage = safe && !safe.startsWith('url')
-                        ? `url('${safe}')` : safe;
+                    target.style.backgroundImage = value && !value.startsWith('url')
+                        ? `url('${value}')` : value;
                 }
                 return;
             }

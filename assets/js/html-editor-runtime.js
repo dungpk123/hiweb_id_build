@@ -1345,6 +1345,39 @@
         } catch { return []; }
     };
 
+    const getVisualImageTarget = (root) => {
+        if (!root) return null;
+        const preciseSelector = '.ladi-image-background, .ladi-gallery-view-item, .ladi-button-background, .ladi-section-background, img, image, picture, video, iframe';
+        const fallbackSelector = '.ladi-image, .ladi-box';
+
+        if (root.matches?.(preciseSelector) || root.matches?.(fallbackSelector)) return root;
+        return root.querySelector?.(preciseSelector) || root.querySelector?.(fallbackSelector) || root;
+    };
+
+    const captureEditableImageState = (id) => {
+        const el = queryEditableAll(id)[0];
+        if (!el) return null;
+        try {
+            return window.editorStateManager?.captureElementState?.(el) || null;
+        } catch (e) {
+            console.warn('[ImageHistory] capture failed:', e);
+            return null;
+        }
+    };
+
+    const postImageCommitCommand = (type, id, before, after) => {
+        if (!id || !before || !after) return;
+        postMsg({
+            type: 'COMMIT_COMMAND',
+            command: {
+                type,
+                elementId: id,
+                before,
+                after,
+            },
+        });
+    };
+
     const hasEditableChildren = (el) => !!(el?.querySelector?.(EDITABLE_SEL));
 
     const isContainerOnlyEditable = (el) => {
@@ -3253,11 +3286,14 @@
             postMsg({ type: 'IMAGE_SRC_ERROR', targetId: elementId, error: 'Element not found' });
             return;
         }
+        const target = getVisualImageTarget(element);
         let src = '';
-        if (element.tagName === 'IMG') {
-            src = element.src || '';
+        if (target.tagName === 'IMG') {
+            src = target.src || target.currentSrc || '';
+        } else if (target.tagName === 'IMAGE') {
+            src = target.getAttribute('href') || target.getAttribute('xlink:href') || target.getAttribute('src') || '';
         } else {
-            const bgImage = element.style.backgroundImage || window.getComputedStyle(element).backgroundImage;
+            const bgImage = target.style.backgroundImage || window.getComputedStyle(target).backgroundImage;
             const match = bgImage?.match(/url\(['"]?([^'"]+)['"]?\)/);
             src = match ? match[1] : '';
         }
@@ -4003,18 +4039,26 @@
             if (!id) return;
             // Guard: don't allow drop onto locked elements
             if (isElementLocked(t)) return;
-            if (t.tagName === 'IMG') {
-                t.setAttribute('src', url);
+            const beforeState = captureEditableImageState(id);
+            const target = getVisualImageTarget(t);
+            if (target.tagName === 'IMG') {
+                target.setAttribute('src', url);
+                target.src = url;
                 if (rotation > 0 || scale !== 1) {
-                    const nt = (t.style.transform || '').replace(/rotate\([^)]*\)/g, '').replace(/scale\([^)]*\)/g, '').trim();
+                    const nt = (target.style.transform || '').replace(/rotate\([^)]*\)/g, '').replace(/scale\([^)]*\)/g, '').trim();
                     const parts = [];
                     if (rotation > 0) parts.push('rotate(' + rotation + 'deg)');
                     if (scale !== 1) parts.push('scale(' + scale + ')');
-                    t.style.transform = (nt + ' ' + parts.join(' ')).trim();
+                    target.style.transform = (nt + ' ' + parts.join(' ')).trim();
                 }
             } else {
-                t.style.backgroundImage = "url('" + url + "')"; t.style.backgroundSize = 'cover'; t.style.backgroundPosition = 'center';
-                if (rotation > 0) { const nt = (t.style.transform || '').replace(/rotate\([^)]*\)/g, '').trim(); t.style.transform = (nt + ' rotate(' + rotation + 'deg)').trim(); }
+                target.style.backgroundImage = "url('" + url + "')";
+                target.style.backgroundSize = 'cover'; target.style.backgroundPosition = 'center';
+                if (rotation > 0) { const nt = (target.style.transform || '').replace(/rotate\([^)]*\)/g, '').trim(); target.style.transform = (nt + ' rotate(' + rotation + 'deg)').trim(); }
+            }
+            const afterState = captureEditableImageState(id);
+            if (beforeState && afterState && !window.__htmlEditorHistoryApplying) {
+                postImageCommitCommand('HTML_IMAGE_DROP', id, beforeState, afterState);
             }
             postMsg({ type: 'HTML_IMAGE_DROPPED', id, value: url, rotation });
         });
@@ -4565,15 +4609,35 @@
         }
 
         if (data.type === 'SET_HTML_IMAGE' && data.id) {
+            const value = String(data.value || '');
+            const beforeState = captureEditableImageState(data.id);
             queryEditableAll(data.id).forEach(el => {
                 if (isElementLocked(el)) return; // Guard: skip locked images
-                if (el.tagName === 'IMG') el.setAttribute('src', data.value || '');
-                else { el.style.backgroundImage = "url('" + (data.value || '') + "')"; el.style.backgroundSize = 'cover'; el.style.backgroundPosition = 'center'; }
+                const target = getVisualImageTarget(el);
+                if (target.tagName === 'IMG') {
+                    target.setAttribute('src', value);
+                    target.src = value;
+                } else if (target.tagName === 'IMAGE') {
+                    target.setAttribute('href', value);
+                    target.setAttribute('xlink:href', value);
+                    target.setAttribute('src', value);
+                } else {
+                    target.style.backgroundImage = value ? (value.startsWith('url(') ? value : "url('" + value + "')") : '';
+                    target.style.backgroundSize = 'cover';
+                    target.style.backgroundPosition = 'center';
+                    target.style.backgroundRepeat = 'no-repeat';
+                }
             });
+            const afterState = captureEditableImageState(data.id);
+            if (beforeState && afterState && !window.__htmlEditorHistoryApplying) {
+                postImageCommitCommand('HTML_IMAGE_CHANGE', data.id, beforeState, afterState);
+            }
         }
 
         if (data.type === 'SET_HTML_IMAGE_STYLE' && data.id) {
+            const beforeState = captureEditableImageState(data.id);
             queryEditableAll(data.id).forEach(el => {
+                const target = getVisualImageTarget(el);
                 // FIX: Đảm bảo Container luôn có các thuộc tính bắt buộc để clip nội dung
                 // if (el.tagName !== 'IMG') {
                 //     el.style.overflow = 'hidden';
@@ -4583,13 +4647,13 @@
                 // }
 
                 const s = data.style;
-                if (s.borderRadius !== undefined) el.style.borderRadius = s.borderRadius;
-                if (s.filter !== undefined) el.style.filter = s.filter;
-                if (s.opacity !== undefined) el.style.opacity = s.opacity;
-                if (s.clipPath !== undefined) el.style.clipPath = s.clipPath;
-                if (s.boxShadow !== undefined) el.style.boxShadow = s.boxShadow;
-                applyDimensionValue(el.style, 'width', s.width);
-                applyDimensionValue(el.style, 'height', s.height);
+                if (s.borderRadius !== undefined) target.style.borderRadius = s.borderRadius;
+                if (s.filter !== undefined) target.style.filter = s.filter;
+                if (s.opacity !== undefined) target.style.opacity = s.opacity;
+                if (s.clipPath !== undefined) target.style.clipPath = s.clipPath;
+                if (s.boxShadow !== undefined) target.style.boxShadow = s.boxShadow;
+                applyDimensionValue(target.style, 'width', s.width);
+                applyDimensionValue(target.style, 'height', s.height);
                 if (s.crop !== undefined) {
                     if (s.crop) {
                         const { x = 0, y = 0, width: w = 1, height: h = 1, shape } = s.crop;
@@ -4599,8 +4663,8 @@
                         const shapeStr = shape && String(shape) !== '0' ? String(shape) : null;
                         const isMask = shapeStr && shapeStr.startsWith('/');
                         const clip = 'inset(' + t2.toFixed(2) + '% ' + r2.toFixed(2) + '% ' + b2.toFixed(2) + '% ' + l2.toFixed(2) + '%' + (shapeStr && !isMask ? ' round ' + shapeStr : '') + ')';
-                        const target2 = el.tagName !== 'IMG' ? el.querySelector('img') : null;
-                        const img2 = el.tagName === 'IMG' ? el : target2;
+                        const target2 = target.tagName !== 'IMG' ? target.querySelector('img') : null;
+                        const img2 = target.tagName === 'IMG' ? target : target2;
                         if (img2) {
                             const imgStyles = { objectFit: 'cover', objectPosition: cx.toFixed(2) + '% ' + cy.toFixed(2) + '%', transformOrigin: 'center center', scale: String(+sc2.toFixed(4)) };
                             if (isMask) {
@@ -4632,22 +4696,22 @@
                             } else {
                                 elStyles.clipPath = clip;
                             }
-                            Object.assign(el.style, elStyles);
+                            Object.assign(target.style, elStyles);
                         }
                     } else {
-                        el.style.clipPath = '';
-                        el.style.maskImage = '';
-                        el.style.WebkitMaskImage = '';
-                        el.style.maskSize = '';
-                        el.style.WebkitMaskSize = '';
-                        el.style.maskRepeat = '';
-                        el.style.WebkitMaskRepeat = '';
-                        const t2 = el.tagName !== 'IMG' ? (el.querySelector('img') || el) : el;
+                        target.style.clipPath = '';
+                        target.style.maskImage = '';
+                        target.style.WebkitMaskImage = '';
+                        target.style.maskSize = '';
+                        target.style.WebkitMaskSize = '';
+                        target.style.maskRepeat = '';
+                        target.style.WebkitMaskRepeat = '';
+                        const t2 = target.tagName !== 'IMG' ? (target.querySelector('img') || target) : target;
                         Object.assign(t2.style, { clipPath: '', objectFit: '', objectPosition: '', scale: '', maskImage: '', WebkitMaskImage: '', maskSize: '', WebkitMaskSize: '', maskRepeat: '', WebkitMaskRepeat: '' });
-                        el.style.backgroundPosition = el.style.backgroundSize = '';
+                        target.style.backgroundPosition = target.style.backgroundSize = '';
                     }
                 }
-                applyTransformFromStyle(el, s, data.id);
+                applyTransformFromStyle(target, s, data.id);
                 // ✅ Update snapshot if the modified element is currently selected
                 if (currentSelectedImage === el) {
                     el.__editorIdentitySnapshot = snapshotElementIdentity(el);
@@ -4660,6 +4724,10 @@
                     el.style.cursor = 'move';
                 }
             });
+            const afterState = captureEditableImageState(data.id);
+            if (beforeState && afterState && !window.__htmlEditorHistoryApplying) {
+                postImageCommitCommand('HTML_IMAGE_STYLE_CHANGE', data.id, beforeState, afterState);
+            }
         }
 
         if (data.type === 'SET_HTML_STYLE' && data.id) {

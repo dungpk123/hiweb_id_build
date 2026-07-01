@@ -29,17 +29,17 @@
   };
 
   var EFFECT_DEFAULTS = {
-    snowflakes: { count: 16, speed: 9, fallSpeed: 18, sway: 3, spawnInterval: 850 },
-    "snow-icon": { count: 12, speed: 8, fallSpeed: 8, sway: 4, spawnInterval: 900 },
-    petals2: { count: 80, speed: 9, fallSpeed: 9, sway: 3, spawnInterval: 850 },
-    sakura: { count: 46, speed: 8, fallSpeed: 8, sway: 9, spawnInterval: 0 },
-    hearts: { count: 10, speed: 8, fallSpeed: 8, bounce: 0.6, spawnInterval: 950 },
-    bubbles: { count: 18, speed: 14, fallSpeed: 14, sway: 5, spawnInterval: 1200 },
-    stardust: { count: 24, speed: 16, fallSpeed: 16, sway: 6, spawnInterval: 900 },
-    fireflies: { count: 26, speed: 18, fallSpeed: 18, sway: 8, spawnInterval: 850 },
-    "canvas-hearts": { count: 40, speed: 1, fallSpeed: 1, spawnInterval: 1000 },
-    leaves: { count: 60, speed: 1, fallSpeed: 1, spawnInterval: 1000 },
-    custom: { count: 10, speed: 9, fallSpeed: 9, defaultIcon: "*", spawnInterval: 1200 },
+    snowflakes: { count: 16, speed: 9, sway: 3, spawnInterval: 850 },
+    "snow-icon": { count: 12, speed: 8, sway: 4, spawnInterval: 900 },
+    petals2: { count: 80, speed: 9, sway: 3, spawnInterval: 850 },
+    sakura: { count: 46, speed: 8, sway: 9, spawnInterval: 0 },
+    hearts: { count: 10, speed: 8, bounce: 0.6, spawnInterval: 950 },
+    bubbles: { count: 18, speed: 14, sway: 5, spawnInterval: 1200 },
+    stardust: { count: 24, speed: 16, sway: 6, spawnInterval: 900 },
+    fireflies: { count: 26, speed: 18, sway: 8, spawnInterval: 850 },
+    "canvas-hearts": { count: 40, speed: 1, spawnInterval: 1000 },
+    leaves: { count: 60, speed: 1, spawnInterval: 1000 },
+    custom: { count: 10, speed: 9, defaultIcon: "*", spawnInterval: 1200 },
   };
 
   function ensureStyle() {
