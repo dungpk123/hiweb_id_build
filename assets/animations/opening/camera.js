@@ -376,6 +376,11 @@
 
       shadowRoot.host.classList.add("away");
       intro.classList.add("away");
+      try {
+        if (window.__finishOpeningIntro) {
+          window.__finishOpeningIntro();
+        }
+      } catch (err) {}
       setTimeout(() => {
         intro.style.display = "none";
         if (main) {

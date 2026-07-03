@@ -25,7 +25,7 @@ if (window.openingEffectManager) {
         window.__allowOpeningEffectPreview === true ||
         document.body?.getAttribute("data-opening-preview") === "true" ||
         document.documentElement?.getAttribute("data-opening-preview") ===
-          "true";
+        "true";
 
       if (forcePreview) {
         return false;
