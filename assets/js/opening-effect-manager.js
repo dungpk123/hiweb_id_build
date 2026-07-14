@@ -4,7 +4,7 @@ if (window.openingEffectManager) {
   class OpeningEffectManager {
     constructor() {
       this.effectMap = {
-        door: "/assets/animations/opening/wedding-gate.js",
+        // door: "/assets/animations/opening/wedding-gate.js",
         flower: "/assets/animations/opening/flower.js",
         camera: "/assets/animations/opening/camera.js",
         video: "/assets/animations/opening/video.js",
@@ -14,6 +14,10 @@ if (window.openingEffectManager) {
         savedatebloom: "/assets/animations/opening/save-date-bloom.js",
         weddingDoorCurtain: "/assets/animations/opening/wedding-door-curtain.js",
         weddingdoorcurtain: "/assets/animations/opening/wedding-door-curtain.js",
+        effect1: "/assets/animations/opening/effect1.js",
+        effect2: "/assets/animations/opening/effect2.js",
+        effect3: "/assets/animations/opening/effect3.js",
+        effectXe: "/assets/animations/opening/effectXe.js",
       };
       this.__version = "save-date-visible-1";
       this.currentEffect = null;
@@ -76,20 +80,17 @@ if (window.openingEffectManager) {
      * @param {string} overrideEffectId - ID ép chạy từ Editor (nếu có)
      */
     init(overrideEffectId) {
-      // 1. Tìm thẻ intro làm "bãi đáp"
       const introEl = document.getElementById("intro");
       if (!introEl) {
-        console.warn("Opening Effect: Không tìm thấy thẻ <div id='intro'>.");
+        console.warn("Opening Effect: #intro not found.");
         return;
       }
 
-      // 2. Kiểm tra chặn render trong Workspace
       if (this.isInEditorMode()) {
         this.cleanup();
         return;
       }
 
-      // 3. Lấy ID hiệu ứng: Ưu tiên override -> data trên #intro -> URL param
       const urlParams = new URLSearchParams(window.location.search);
       const effectId =
         overrideEffectId ||
@@ -102,30 +103,98 @@ if (window.openingEffectManager) {
       }
 
       this.currentEffect = effectId;
-      introEl.style.setProperty("pointer-events", "auto", "important");
-      this.setupShadowDOM(introEl);
+
+      // --- Clone #intro to strip ALL event listeners from finalMobileChrome.js ---
+      // finalMobileChrome.js registers a bubble-phase click handler on #intro
+      // that calls finishIntroAndRevealChrome() + intro.remove() immediately.
+      // Creating a fresh element strips all those listeners.
+      const attrs = {};
+      for (const attr of introEl.attributes) {
+        attrs[attr.name] = attr.value;
+      }
+      const freshIntro = document.createElement("div");
+      freshIntro.id = "intro";
+      for (const [name, value] of Object.entries(attrs)) {
+        freshIntro.setAttribute(name, value);
+      }
+      introEl.parentNode.replaceChild(freshIntro, introEl);
+
+      freshIntro.style.setProperty("pointer-events", "auto", "important");
+      this._introEl = freshIntro;
+      this._freshIntro = freshIntro;
+      this.setupShadowDOM(freshIntro);
       this.loadEffectScript();
 
-      // When user clicks on intro, wait 3s then reveal buttons
-      introEl.addEventListener('click', function onIntroClick() {
-        introEl.removeEventListener('click', onIntroClick);
-        setTimeout(() => {
-          introEl.classList.add('intro-done');
-          document.body?.removeAttribute('data-opening-effect');
-          const ids = ['final-bottom-bar', 'final-desktop-sidebar', 'wish-scroll-viewport'];
-          ids.forEach((id) => {
-            const el = document.getElementById(id);
-            if (el) {
-              el.style.setProperty('opacity', '1', 'important');
-              el.style.setProperty('visibility', 'visible', 'important');
-              el.style.setProperty('pointer-events', 'auto', 'important');
-            }
-          });
-          document.getElementById('final-mobile-chrome')?.querySelectorAll('[data-chrome-action], button').forEach((el) => {
-            el.style.setProperty('pointer-events', 'auto', 'important');
-          });
-        }, 3000);
+      // --- Duration map (ms) ---
+      // Based on each animation script's last setTimeout before "away" class is added.
+      // Interactive effects get a generous buffer for user to click.
+      const effectDurations = {
+        flower: 6000,
+        camera: 12000,
+        heartcard: 10000,
+        envelope: 8000,
+        saveDateBloom: 8000,
+        savedatebloom: 8000,
+        weddingDoorCurtain: 6000,
+        weddingdoorcurtain: 6000,
+        video: 15000,
+      };
+
+      const duration = effectDurations[effectId] || 8000;
+      const self = this;
+      var finished = false;
+
+      function markFinished() {
+        if (finished) return;
+        finished = true;
+        self.finishIntro();
+      }
+
+      // --- Fallback timeout based on effect duration ---
+      this._finishTimer = setTimeout(markFinished, duration);
+
+      // --- Also watch for 'away' class (animation signals it's done) ---
+      var introObs = new MutationObserver(function (muts) {
+        for (var i = 0; i < muts.length; i++) {
+          if (muts[i].attributeName === "class" && freshIntro.classList.contains("away")) {
+            introObs.disconnect();
+            markFinished();
+            return;
+          }
+        }
       });
+      introObs.observe(freshIntro, { attributes: true, attributeFilter: ["class"] });
+      this._introObs = introObs;
+    }
+
+    finishIntro() {
+      const introEl = this._introEl || document.getElementById("intro");
+      if (!introEl) return;
+      try {
+        if (this._finishTimer) { clearTimeout(this._finishTimer); this._finishTimer = null; }
+        if (this._introObs) { this._introObs.disconnect(); this._introObs = null; }
+        introEl.classList.add("intro-done");
+        introEl.setAttribute("data-intro-finished", "true");
+        introEl.removeAttribute("data-opening-effect");
+        introEl.style.setProperty("opacity", "0", "important");
+        introEl.style.setProperty("pointer-events", "none", "important");
+        document.body?.removeAttribute("data-opening-effect");
+        const ids = ["final-bottom-bar", "final-desktop-sidebar", "wish-scroll-viewport"];
+        ids.forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) {
+            el.style.setProperty("opacity", "1", "important");
+            el.style.setProperty("visibility", "visible", "important");
+            el.style.setProperty("pointer-events", "auto", "important");
+          }
+        });
+        document.getElementById("final-mobile-chrome")
+          ?.querySelectorAll("[data-chrome-action], button")
+          .forEach((el) => {
+            el.style.setProperty("pointer-events", "auto", "important");
+          });
+      } catch (e) {}
+      this.cleanup();
     }
 
     /**
