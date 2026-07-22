@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Menu QR Editor - Standalone Test</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; }
+    
+    .test-container {
+      max-width: 1200px;
+      margin: 20px auto;
+      padding: 20px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    h1 { font-size: 24px; margin-bottom: 20px; color: #0f172a; }
+    
+    .test-info {
+      background: #e0f2fe;
+      border: 1px solid #0284c7;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 20px;
+      color: #0369a1;
+    }
+    
+    .test-controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    
+    button {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn-primary {
+      background: #0f172a;
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      background: #1e293b;
+    }
+    
+    .btn-secondary {
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+    
+    .btn-secondary:hover {
+      background: #cbd5e1;
+    }
+    
+    .test-result {
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 16px;
+      margin-top: 20px;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 12px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    
+    .test-result.success {
+      background: #dcfce7;
+      border-color: #86efac;
+      color: #166534;
+    }
+    
+    .test-result.error {
+      background: #fef2f2;
+      border-color: #fecaca;
+      color: #991b1b;
+    }
+    
+    .log-entry {
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(0,0,0,0.1);
+    }
+    
+    .log-entry:last-child {
+      border-bottom: none;
+    }
+    
+    .time { color: #64748b; }
+    .msg { flex: 1; }
+  </style>
+</head>
+<body>
+
+<div class="test-container">
+  <h1>🧪 Menu QR Editor - Standalone Test</h1>
+  
+  <div class="test-info">
+    <strong>Bài kiểm tra:</strong> Xác minh refactor Vanilla JavaScript hoạt động độc lập<br>
+    <strong>Phiên bản:</strong> v2.0.0 (Refactor)<br>
+    <strong>Kiến trúc:</strong> finalMobileChrome.js pattern
+  </div>
+  
+  <div class="test-controls">
+    <button class="btn-primary" onclick="runAllTests()">🚀 Chạy tất cả kiểm tra</button>
+    <button class="btn-secondary" onclick="testDOM()">📄 Kiểm tra DOM</button>
+    <button class="btn-secondary" onclick="testState()">💾 Kiểm tra State</button>
+    <button class="btn-secondary" onclick="testResponsive()">📱 Kiểm tra Responsive</button>
+    <button class="btn-secondary" onclick="testAuth()">🔐 Kiểm tra Auth</button>
+    <button class="btn-secondary" onclick="clearLogs()">🗑️ Xóa log</button>
+  </div>
+  
+  <div class="test-result" id="testResult">
+    <div class="log-entry">
+      <span class="time">[READY]</span>
+      <span class="msg">Nhấn nút để bắt đầu kiểm tra...</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Logging utility
+  const testLogs = [];
+  
+  function logTest(message, type = 'info') {
+    const time = new Date().toLocaleTimeString();
+    const entry = { time, message, type };
+    testLogs.push(entry);
+    updateLogDisplay();
+    console.log(`[${type.toUpperCase()}]`, message);
+  }
+  
+  function updateLogDisplay() {
+    const resultDiv = document.getElementById('testResult');
+    const html = testLogs.map(log => 
+      `<div class="log-entry"><span class="time">[${log.type.toUpperCase()}]</span> <span class="msg">${escapeHtml(log.message)}</span></div>`
+    ).join('');
+    resultDiv.innerHTML = html;
+    resultDiv.scrollTop = resultDiv.scrollHeight;
+  }
+  
+  function clearLogs() {
+    testLogs.length = 0;
+    updateLogDisplay();
+    logTest('Đã xóa log', 'info');
+  }
+  
+  function escapeHtml(text) {
+    const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
+    return String(text).replace(/[&<>]/g, m => map[m]);
+  }
+  
+  // Test 1: DOM Structure
+  function testDOM() {
+    clearLogs();
+    logTest('=== KIỂM TRA CẤU TRÚC DOM ===', 'start');
+    
+    const elements = {
+      'MQE_root': '#MQE_root',
+      'MQE_loginBtn': '#MQE_loginBtn',
+      'MQE_overlay': '#MQE_overlay',
+      'MQE_editor': '#MQE_editor',
+      'MQE_bottomNav': '#MQE_bottomNav',
+      'MQE_iframe': '#MQE_iframe',
+      'MQE_email': '#MQE_email',
+      'MQE_pass': '#MQE_pass',
+    };
+    
+    let passed = 0, failed = 0;
+    
+    Object.entries(elements).forEach(([name, selector]) => {
+      const el = document.querySelector(selector);
+      if (el) {
+        logTest(`✅ ${name}: Tìm thấy`, 'success');
+        passed++;
+      } else {
+        logTest(`❌ ${name}: KHÔNG tìm thấy`, 'error');
+        failed++;
+      }
+    });
+    
+    logTest(`Kết quả: ${passed}/${Object.keys(elements).length} thành công`, 'info');
+  }
+  
+  // Test 2: State Management
+  function testState() {
+    clearLogs();
+    logTest('=== KIỂM TRA QUẢN LÝ STATE ===', 'start');
+    
+    if (typeof window.MQE_STATE === 'undefined') {
+      logTest('❌ MQE_STATE chưa được khởi tạo', 'error');
+      return;
+    }
+    
+    logTest('✅ MQE_STATE tồn tại', 'success');
+    logTest(`isMobile: ${window.MQE_STATE.isMobile}`, 'info');
+    logTest(`isLoggedIn: ${window.MQE_STATE.isLoggedIn}`, 'info');
+    logTest(`isDirty: ${window.MQE_STATE.isDirty}`, 'info');
+    logTest(`activeTab: ${window.MQE_STATE.activeTab}`, 'info');
+  }
+  
+  // Test 3: Responsive Behavior
+  function testResponsive() {
+    clearLogs();
+    logTest('=== KIỂM TRA RESPONSIVE ===', 'start');
+    
+    const width = window.innerWidth;
+    const isMobile = width < 992;
+    
+    logTest(`Chiều rộng màn hình: ${width}px`, 'info');
+    logTest(`Chế độ: ${isMobile ? 'MOBILE' : 'DESKTOP'}`, 'info');
+    
+    if (window.MQE_STATE) {
+      logTest(`MQE_STATE.isMobile: ${window.MQE_STATE.isMobile}`, 'info');
+      logTest(`Khớp: ${window.MQE_STATE.isMobile === isMobile ? '✅' : '❌'}`, 'info');
+    }
+    
+    logTest('💡 Hãy thay đổi kích thước cửa sổ để kiểm tra resize', 'info');
+  }
+  
+  // Test 4: Authentication Flow
+  function testAuth() {
+    clearLogs();
+    logTest('=== KIỂM TRA XÁC THỰC ===', 'start');
+    
+    const token = localStorage.getItem('userToken');
+    logTest(`Token hiện tại: ${token ? '✅ Có' : '❌ Không có'}`, 'info');
+    
+    if (token) {
+      logTest(`Token: ${token.substring(0, 20)}...`, 'info');
+    }
+    
+    logTest('Các hàm auth có sẵn:', 'info');
+    logTest(`  - window.MQE_init: ${typeof window.MQE_init === 'function' ? '✅' : '❌'}`, 'info');
+    logTest(`  - window.MQE_showLogin: ${typeof window.MQE_showLogin === 'function' ? '✅' : '❌'}`, 'info');
+    logTest(`  - window.MQE_doLogin: ${typeof window.MQE_doLogin === 'function' ? '✅' : '❌'}`, 'info');
+    logTest(`  - window.MQE_logout: ${typeof window.MQE_logout === 'function' ? '✅' : '❌'}`, 'info');
+  }
+  
+  // Run all tests
+  function runAllTests() {
+    clearLogs();
+    logTest('🚀 Bắt đầu chạy tất cả kiểm tra...', 'start');
+    
+    setTimeout(() => testDOM(), 100);
+    setTimeout(() => { 
+      testState();
+      logTest('', 'info');
+    }, 500);
+    setTimeout(() => { 
+      testResponsive();
+      logTest('', 'info');
+    }, 1000);
+    setTimeout(() => { 
+      testAuth();
+      logTest('✅ Hoàn tất tất cả kiểm tra', 'success');
+    }, 1500);
+  }
+  
+  // Info on load
+  window.addEventListener('load', () => {
+    logTest('🔧 Trang đã tải xong', 'info');
+    logTest('Hãy chạy các bài kiểm tra để xác minh refactor', 'info');
+  });
+</script>
+
+</body>
+</html>

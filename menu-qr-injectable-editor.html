@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Menu QR Editor - Runtime</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/feather-icons"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<style>
+.menu-qr-editor-page {
+  background: radial-gradient(circle at top left, rgba(14, 165, 233, 0.14), transparent 28%),
+    radial-gradient(circle at top right, rgba(251, 146, 60, 0.12), transparent 24%),
+    linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+  color: #0f172a;
+}
+.menu-qr-editor-header{min-height:64px;flex:0 0 auto}
+.menu-qr-editor-mobile-header{min-height:60px;flex:0 0 auto}
+.menu-qr-editor-sidebar-panel{box-shadow:12px 0 32px rgba(148,163,184,0.12);min-height:0}
+.menu-qr-editor-sidebar-scroll{min-height:0;scrollbar-gutter:stable;overflow-y:auto}
+.menu-qr-editor-preview{position:relative;min-width:0;min-height:0}
+.menu-qr-editor-preview-stage iframe{display:block;max-width:100%;border:none;width:100%;height:100%}
+.menu-qr-field-control{display:block;width:100%;min-height:44px;box-sizing:border-box;border-radius:16px;border:1px solid #cbd5e1;background:#f8fafc;padding:10px 16px;font-size:14px;line-height:1.55;color:#0f172a;outline:none;transition:all .15s ease}
+.menu-qr-field-control:focus{border-color:#38b6ff;background:#fff;box-shadow:0 0 0 3px rgba(56,182,255,0.14)}
+.menu-qr-field-textarea{min-height:96px;resize:none;overflow:hidden;padding-top:12px;padding-bottom:12px;line-height:1.6}
+.menu-qr-toggle{width:44px;height:24px;border-radius:999px;appearance:none;background:#cbd5e1;position:relative;transition:background-color .2s ease;cursor:pointer}
+.menu-qr-toggle::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:999px;background:#fff;box-shadow:0 1px 3px rgba(15,23,42,0.25);transition:transform .2s ease}
+.menu-qr-toggle:checked{background:#0ea5e9}
+.menu-qr-toggle:checked::after{transform:translateX(20px)}
+.menu-qr-toggle:disabled{cursor:not-allowed;opacity:.45}
+.menu-qr-effect-card{display:flex;flex-direction:column;align-items:center;gap:6px;width:100%;min-height:104px;padding:9px 6px 8px;border:1px solid #d7e3f4;border-radius:14px;background:#fff;transition:all .2s ease;position:relative;cursor:pointer}
+.menu-qr-effect-card.is-selected{border-color:#3b82f6;background:#eff6ff;box-shadow:inset 0 0 0 1px rgba(59,130,246,0.18)}
+#loading-overlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:#fff;flex-direction:column;gap:10px;display:none}
+</style>
+<style>
+#MQE_loginBtn{position:fixed;bottom:20px;right:20px;z-index:999;width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#23788a 0%,#42aabe 100%);color:#fff;border:none;font-size:28px;cursor:pointer;box-shadow:0 4px 12px rgba(35,120,138,0.3);transition:all .3s ease;display:flex;align-items:center;justify-content:center}
+#MQE_loginBtn:hover{transform:scale(1.1);box-shadow:0 6px 16px rgba(35,120,138,0.4)}
+#MQE_overlay{position:fixed;inset:0;z-index:998;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+#MQE_overlay.active{display:flex}
+#MQE_modal{background:#fff;padding:32px;border-radius:12px;width:90%;max-width:400px;box-shadow:0 10px 40px rgba(0,0,0,0.2)}
+</style>
+</head>
+<body>
+<!-- LOGIN BUTTON (FAB) -->
+<button id="MQE_loginBtn" title="Đăng nhập">👤</button>
+
+<!-- LOGIN MODAL -->
+<div id="MQE_overlay">
+  <div id="MQE_modal">
+    <div style="text-align:center;margin-bottom:20px">
+      <h2 style="margin:0 0 8px 0;font-size:24px;color:#23788a">Đăng nhập</h2>
+      <p style="margin:0;color:#666;font-size:14px">Đăng nhập để quản lý Menu QR</p>
+    </div>
+    <input type="text" id="MQE_email" placeholder="Nhập email..." style="width:100%;padding:12px;margin-bottom:12px;border:1px solid #ccc;border-radius:6px;font-size:14px;box-sizing:border-box">
+    <input type="password" id="MQE_pass" placeholder="Nhập mật khẩu..." style="width:100%;padding:12px;margin-bottom:16px;border:1px solid #ccc;border-radius:6px;font-size:14px;box-sizing:border-box">
+    <button id="MQE_submitLogin" style="width:100%;padding:12px;background:#23788a;color:#fff;border:none;border-radius:6px;font-size:16px;font-weight:600;cursor:pointer">Đăng nhập</button>
+  </div>
+</div>
+
+<!-- LOADING OVERLAY -->
+<div id="loading-overlay">
+  <i data-feather="loader" class="animate-spin text-sky-500 w-10 h-10"></i>
+  <span class="font-bold text-slate-600 text-sm">Đang tải dữ liệu Menu...</span>
+</div>
+
+<!-- EDITOR CONTAINER -->
+<div id="editor-container" style="display:none;height:100vh;flex-direction:column" class="w-full overflow-hidden">
+  <!-- DESKTOP HEADER -->
+  <header class="menu-qr-editor-header sticky top-0 z-40 hidden md:flex items-center justify-between gap-4 border-b border-slate-200 bg-white/95 px-6 backdrop-blur-sm">
+    <div class="flex items-center gap-4">
+      <button id="btn-back-desktop" class="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
+        <i data-feather="arrow-left" class="w-4 h-4"></i>
+      </button>
+      <div>
+        <h1 class="truncate text-sm font-extrabold uppercase tracking-[0.18em] text-slate-900" id="header-title-desktop">MENU QR EDITOR</h1>
+        <div class="mt-1 flex items-center gap-3">
+          <div class="flex items-center gap-2">
+            <span class="h-2 w-2 rounded-full bg-emerald-500" id="status-dot"></span>
+            <span class="text-[11px] font-semibold text-emerald-600" id="status-text">Đã lưu</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <div class="hidden md:inline-flex rounded-full bg-slate-100 p-0.5 border border-slate-200">
+        <button id="btn-view-desktop" class="rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] transition-all !bg-slate-950 !text-white shadow-sm">Desktop</button>
+        <button id="btn-view-mobile" class="rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] transition-all text-slate-600 hover:text-slate-900">Mobile</button>
+      </div>
+      <button id="btn-save" class="inline-flex items-center justify-center rounded-full px-4 py-2 text-[12px] font-bold uppercase tracking-[0.08em] bg-slate-950 text-white shadow-sm hover:bg-slate-800">Lưu</button>
+      <button id="btn-import" class="inline-flex items-center justify-center rounded-full px-4 py-2 text-[12px] font-bold uppercase tracking-[0.08em] bg-slate-100 text-slate-700 hover:bg-white border">Nhập file</button>
+      <button id="btn-preview" class="inline-flex items-center justify-center rounded-full px-4 py-2 text-[12px] font-bold uppercase tracking-[0.08em] bg-slate-100 text-slate-700 hover:bg-white border">Xem trước</button>
+      <button id="btn-publish" class="inline-flex items-center justify-center rounded-full px-4 py-2 text-[12px] font-bold uppercase tracking-[0.08em] bg-sky-500 text-white shadow-lg shadow-sky-500/25 hover:bg-sky-400">Xuất bản</button>
+    </div>
+  </header>
+
+  <!-- MOBILE HEADER -->
+  <header class="menu-qr-editor-mobile-header sticky top-0 z-30 flex items-center gap-2 border-b border-slate-200 bg-white/95 px-3 backdrop-blur-sm md:hidden">
+    <button id="btn-back-mobile" class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700">
+      <i data-feather="arrow-left" class="w-5 h-5"></i>
+    </button>
+    <div class="min-w-0 flex-1">
+      <div class="truncate text-xs font-bold uppercase tracking-[0.14em] text-slate-900" id="header-title-mobile">MENU QR EDITOR</div>
+      <div class="flex items-center gap-2 mt-1">
+        <span class="h-1.5 w-1.5 rounded-full bg-emerald-500" id="status-dot-mobile"></span>
+        <span class="text-[10px] font-semibold text-emerald-600" id="status-text-mobile">Đã lưu</span>
+      </div>
+    </div>
+    <button id="btn-publish-mobile" class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 hover:bg-emerald-600">
+      <i data-feather="check" class="w-4 h-4"></i>
+    </button>
+  </header>
+
+  <div class="flex flex-1 overflow-hidden relative">
+    <!-- DESKTOP SIDEBAR -->
+    <aside class="menu-qr-editor-sidebar-panel z-20 hidden w-[320px] lg:w-[380px] flex-col border-r border-slate-200 bg-white md:flex">
+      <div class="menu-qr-editor-sidebar-scroll flex-1 p-4 space-y-4">
+        <!-- INFO SECTION -->
+        <section class="menu-qr-panel rounded-2xl border border-slate-200/80 bg-white shadow-sm hover:shadow-md transition-shadow">
+          <div class="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+            <div class="flex items-center gap-2.5">
+              <span class="flex h-7 w-7 items-center justify-center rounded-full bg-sky-50 text-sky-600"><i data-feather="info" class="w-3.5 h-3.5"></i></span>
+              <h3 class="text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-900">Thông tin menu</h3>
+            </div>
+          </div>
+          <div class="space-y-3 px-4 py-3.5">
+            <div class="space-y-1.5">
+              <label class="block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Tên menu</label>
+              <input type="text" id="input-title" class="menu-qr-field-control" placeholder="Tên menu...">
+            </div>
+            <div class="space-y-1.5">
+              <label class="block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Mô tả</label>
+              <textarea id="input-desc" class="menu-qr-field-textarea menu-qr-field-control" rows="3" placeholder="Nhập mô tả..."></textarea>
+            </div>
+            <div class="space-y-1.5">
+              <label class="block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Footer</label>
+              <textarea id="input-footer" class="menu-qr-field-textarea menu-qr-field-control" rows="2" placeholder="Chân trang..."></textarea>
+            </div>
+          </div>
+        </section>
+
+        <!-- LOGO SECTION -->
+        <section class="menu-qr-panel rounded-2xl border border-slate-200/80 bg-white shadow-sm hover:shadow-md transition-shadow">
+          <div class="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+            <div class="flex items-center gap-2.5">
+              <span class="flex h-7 w-7 items-center justify-center rounded-full bg-violet-50 text-violet-600"><i data-feather="image" class="w-4 h-4"></i></span>
+              <h3 class="text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-900">Logo</h3>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <button class="flex h-7 w-7 items-center justify-center rounded-full border border-sky-200 bg-sky-50 text-sky-600 hover:bg-sky-100" id="btn-upload-logo" title="Tải từ máy tính"><i data-feather="upload" class="w-3.5 h-3.5"></i></button>
+            </div>
+          </div>
+          <div class="space-y-3 px-4 py-3.5">
+            <input type="file" id="file-logo" accept="image/*" class="hidden">
+            <div class="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-2 hidden" id="logo-preview-box">
+              <img id="logo-img" src="" alt="logo" class="h-14 w-14 shrink-0 rounded-xl border border-slate-200 bg-white object-contain p-1">
+              <div class="min-w-0 flex-1">
+                <div class="truncate text-sm font-semibold text-slate-800">Logo hiện tại</div>
+                <div class="text-xs text-slate-400">Đang hiển thị</div>
+              </div>
+              <button id="btn-remove-logo" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-rose-200 bg-white text-rose-500 hover:bg-rose-50"><i data-feather="trash-2" class="w-3.5 h-3.5"></i></button>
+            </div>
+            <button type="button" id="btn-select-logo-empty" class="flex w-full items-center gap-3 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-3 py-2.5 text-left text-sm text-slate-400 transition-colors hover:border-sky-300 hover:bg-sky-50/40"><i data-feather="image" class="w-4 h-4 text-slate-300"></i><span>Chưa có logo — nhấn để tải lên</span></button>
+          </div>
+        </section>
+
+        <!-- EFFECTS SECTION -->
+        <section class="menu-qr-panel rounded-2xl border border-slate-200/80 bg-white shadow-sm hover:shadow-md transition-shadow">
+          <div class="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+            <div class="flex items-center gap-2.5">
+              <span class="flex h-7 w-7 items-center justify-center rounded-full bg-amber-50 text-amber-600"><i data-feather="star" class="w-3.5 h-3.5"></i></span>
+              <h3 class="text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-900">Hiệu ứng</h3>
+            </div>
+          </div>
+          <div class="space-y-3 px-4 py-3.5">
+            <label class="menu-qr-toggle-row flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3.5 py-3">
+              <span class="text-sm font-medium text-slate-700">Mở nắp / Hiệu ứng mở</span>
+              <input type="checkbox" class="menu-qr-toggle" id="toggle-open-effect">
+            </label>
+            <label class="menu-qr-toggle-row flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3.5 py-3">
+              <span class="text-sm font-medium text-slate-700">Nhạc nền tự động phát</span>
+              <input type="checkbox" class="menu-qr-toggle" id="toggle-music">
+            </label>
+          </div>
+        </section>
+
+        <!-- CONTACT SECTION -->
+        <section class="menu-qr-panel rounded-2xl border border-slate-200/80 bg-white shadow-sm hover:shadow-md transition-shadow">
+          <div class="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+            <div class="flex items-center gap-2.5">
+              <span class="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-50 text-emerald-600"><i data-feather="phone" class="w-3.5 h-3.5"></i></span>
+              <h3 class="text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-900">Liên hệ</h3>
+            </div>
+          </div>
+          <div class="space-y-3 px-4 py-3.5">
+            <div class="space-y-1.5">
+              <label class="block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Số điện thoại</label>
+              <div class="flex items-center gap-2">
+                <input type="checkbox" class="menu-qr-toggle" id="toggle-phone">
+                <input type="text" id="input-contact-phone" class="menu-qr-field-control flex-1" placeholder="Nhập số điện thoại...">
+              </div>
+            </div>
+            <div class="space-y-1.5">
+              <label class="block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Zalo</label>
+              <div class="flex items-center gap-2">
+                <input type="checkbox" class="menu-qr-toggle" id="toggle-zalo">
+                <input type="text" id="input-contact-zalo" class="menu-qr-field-control flex-1" placeholder="Nhập Zalo...">
+              </div>
+            </div>
+            <div class="space-y-1.5">
+              <label class="block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Facebook</label>
+              <div class="flex items-center gap-2">
+                <input type="checkbox" class="menu-qr-toggle" id="toggle-facebook">
+                <input type="text" id="input-contact-facebook" class="menu-qr-field-control flex-1" placeholder="Link Facebook...">
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </aside>
+
+    <!-- PREVIEW STAGE -->
+    <main class="menu-qr-editor-preview overflow-hidden bg-slate-100/50 flex-1 relative hidden md:block">
+      <div class="mx-auto flex h-full flex-col align-center justify-center" style="max-width:440px;padding:20px">
+        <div class="w-full h-full bg-white rounded-3xl shadow-2xl overflow-hidden border-8 border-slate-900 relative">
+          <iframe id="previewIframe" src="about:blank" class="w-full h-full pointer-events-auto"></iframe>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- MOBILE BOTTOM NAV -->
+  <div id="mobileNavContainer" class="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-3 shadow-lg backdrop-blur md:hidden">
+    <div class="flex max-w-[640px] items-center justify-around gap-1 mx-auto w-full">
+      <button class="flex flex-col items-center justify-center gap-1 text-[10px] text-slate-500 font-semibold p-2 flex-1" id="tab-info"><i data-feather="info" class="w-5 h-5"></i><span>Thông tin</span></button>
+      <button class="flex flex-col items-center justify-center gap-1 text-[10px] text-slate-500 font-semibold p-2 flex-1" id="tab-media"><i data-feather="image" class="w-5 h-5"></i><span>Logo & File</span></button>
+      <button class="flex flex-col items-center justify-center gap-1 text-[10px] text-sky-600 font-semibold p-2 flex-1 bg-sky-50 rounded-xl border border-sky-100" id="btn-save-mobile"><i data-feather="save" class="w-5 h-5"></i><span>Lưu</span></button>
+      <button class="flex flex-col items-center justify-center gap-1 text-[10px] text-slate-500 font-semibold p-2 flex-1" id="tab-effect"><i data-feather="star" class="w-5 h-5"></i><span>Hiệu ứng</span></button>
+      <button class="flex flex-col items-center justify-center gap-1 text-[10px] text-slate-500 font-semibold p-2 flex-1" id="tab-menu"><i data-feather="list" class="w-5 h-5"></i><span>Món ăn</span></button>
+    </div>
+  </div>
+
+  <!-- MOBILE SIDEBAR MODAL -->
+  <div id="mobile-sidebar-modal" class="fixed inset-0 z-40 bg-white flex-col hidden md:hidden">
+    <div class="flex items-center justify-between p-4 border-b border-slate-200">
+      <h2 id="mobile-sidebar-title" class="font-bold uppercase text-slate-800 text-sm tracking-wider">THÔNG TIN</h2>
+      <button id="btn-close-mobile-modal" class="p-2 rounded-full bg-slate-100 text-slate-600"><i data-feather="x" class="w-4 h-4"></i></button>
+    </div>
+    <div id="mobile-sidebar-content" class="flex-1 overflow-y-auto p-4 bg-slate-50"></div>
+  </div>
+</div><!-- end editor-container -->
+
+<script>
+  feather.replace();
+
+  let menuData = {
+    title: "", description: "", footer: "", logo: "",
+    settings: { open_effect: false, music_enabled: false }
+  };
+
+  const dom = {
+    loadingContainer: document.getElementById('loading-overlay'),
+    editorContainer: document.getElementById('editor-container'),
+    inputTitle: document.getElementById('input-title'),
+    inputDesc: document.getElementById('input-desc'),
+    inputFooter: document.getElementById('input-footer'),
+    fileLogo: document.getElementById('file-logo'),
+    btnUploadLogo: document.getElementById('btn-upload-logo'),
+    btnSelectLogoEmpty: document.getElementById('btn-select-logo-empty'),
+    logoPreviewBox: document.getElementById('logo-preview-box'),
+    logoImg: document.getElementById('logo-img'),
+    btnRemoveLogo: document.getElementById('btn-remove-logo'),
+    toggleOpenEffect: document.getElementById('toggle-open-effect'),
+    toggleMusic: document.getElementById('toggle-music'),
+    btnSave: document.getElementById('btn-save'),
+    btnSaveMobile: document.getElementById('btn-save-mobile'),
+    previewIframe: document.getElementById('previewIframe'),
+    statusDot: document.getElementById('status-dot'),
+    statusText: document.getElementById('status-text'),
+    togglePhone: document.getElementById('toggle-phone'),
+    inputPhone: document.getElementById('input-contact-phone'),
+    toggleZalo: document.getElementById('toggle-zalo'),
+    inputZalo: document.getElementById('input-contact-zalo'),
+    toggleFacebook: document.getElementById('toggle-facebook'),
+    inputFacebook: document.getElementById('input-contact-facebook'),
+    mobileTabInfo: document.getElementById('tab-info'),
+    mobileModal: document.getElementById('mobile-sidebar-modal'),
+    btnCloseMobileModal: document.getElementById('btn-close-mobile-modal'),
+    mobileSidebarContent: document.getElementById('mobile-sidebar-content'),
+    desktopSidebar: document.querySelector('.menu-qr-editor-sidebar-panel .menu-qr-editor-sidebar-scroll')
+  };
+
+  const getAuthToken = () => {
+    var t = localStorage.getItem("menuToken") || localStorage.getItem("userToken");
+    if (!t) return "";
+    return t.indexOf("Bearer ") === 0 ? t : "Bearer " + t;
+  };
+
+  const fetchMenuData = async () => {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var uuid = params.get('menuUuid') || params.get('menu_uuid') || '';
+      var apiUrl = 'https://api.hiweb.vn/api/v1/qr/menu_contents?_=' + Date.now();
+      if (uuid) apiUrl += '&menu_uuid=' + encodeURIComponent(uuid);
+      var res = await fetch(apiUrl, { headers: { Authorization: getAuthToken() } });
+      var json = await res.json();
+      if (json && json.status && json.data) menuData = Object.assign({}, menuData, json.data);
+      bindDataToUI();
+      dom.loadingContainer.style.display = 'none';
+      dom.editorContainer.style.display = 'flex';
+      var rawHtml = menuData.html_content || '';
+      if (rawHtml) initIframe(rawHtml);
+    } catch (err) {
+      console.error("API error:", err);
+      dom.loadingContainer.innerHTML = '<span class="text-rose-500 font-bold">Lỗi không thể tải Menu QR</span>';
+    }
+  };
+
+  const bindDataToUI = () => {
+    dom.inputTitle.value = menuData.title || "";
+    dom.inputDesc.value = menuData.description || "";
+    dom.inputFooter.value = menuData.footer || "";
+    dom.toggleOpenEffect.checked = menuData.settings && menuData.settings.open_effect || false;
+    dom.toggleMusic.checked = menuData.settings && menuData.settings.music_enabled || false;
+    if (menuData.logo) {
+      dom.logoImg.src = menuData.logo;
+      dom.logoPreviewBox.classList.remove('hidden');
+      dom.btnSelectLogoEmpty.classList.add('hidden');
+    } else {
+      dom.logoPreviewBox.classList.add('hidden');
+      dom.btnSelectLogoEmpty.classList.remove('hidden');
+    }
+    var s = menuData.settings || {};
+    dom.togglePhone.checked = !!s.show_phone_button;
+    dom.toggleZalo.checked = !!s.show_zalo_button;
+    dom.toggleFacebook.checked = !!s.show_facebook_button;
+    if (menuData.contact) {
+      dom.inputPhone.value = menuData.contact.phone || '';
+      dom.inputZalo.value = menuData.contact.zalo || '';
+      dom.inputFacebook.value = menuData.contact.facebook || '';
+    }
+  };
+
+  const initIframe = async (htmlSrc) => {
+    if (!htmlSrc) return;
+    var content = htmlSrc;
+    if (htmlSrc.indexOf('http') === 0) {
+      try {
+        var r = await fetch(htmlSrc);
+        var ct = r.headers.get('content-type');
+        if (ct && ct.indexOf('application/json') >= 0) {
+          var j = await r.json();
+          content = j.html_content || j.html_template || "";
+        } else {
+          content = await r.text();
+        }
+      } catch (e) { console.error("iframe fetch error", e); }
+    }
+    var jsonStr = JSON.stringify(menuData).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
+    content = content.replace(/\{\{menu\}\}/g, function() { return jsonStr; });
+    var scriptInjected = content.replace(/(<script[^>]*type=["']module["'][^>]*>)/i, function(m) {
+      return '<script>window.__MENU__ = ' + jsonStr + ';<\/script>\n' + m;
+    });
+    var doc = dom.previewIframe.contentWindow.document;
+    doc.open();
+    doc.write(scriptInjected);
+    doc.close();
+  };
+
+  var updateDirty = function(isd) {
+    if (isd) {
+      dom.statusDot.className = 'h-2 w-2 rounded-full bg-amber-500 animate-pulse';
+      dom.statusText.className = 'text-[11px] font-semibold text-amber-600';
+      dom.statusText.innerText = 'Chưa lưu';
+    } else {
+      dom.statusDot.className = 'h-2 w-2 rounded-full bg-emerald-500';
+      dom.statusText.className = 'text-[11px] font-semibold text-emerald-600';
+      dom.statusText.innerText = 'Đã lưu';
+    }
+  };
+
+  dom.inputTitle.addEventListener('input', function(e) { menuData.title = e.target.value; updateDirty(true); });
+  dom.inputDesc.addEventListener('input', function(e) { menuData.description = e.target.value; updateDirty(true); });
+  dom.inputFooter.addEventListener('input', function(e) { menuData.footer = e.target.value; updateDirty(true); });
+  dom.toggleOpenEffect.addEventListener('change', function(e) { menuData.settings.open_effect = e.target.checked; updateDirty(true); });
+  dom.toggleMusic.addEventListener('change', function(e) { menuData.settings.music_enabled = e.target.checked; updateDirty(true); });
+
+  if (!menuData.contact) menuData.contact = {};
+  dom.togglePhone.addEventListener('change', function(e) { menuData.settings.show_phone_button = e.target.checked ? 1 : 0; updateDirty(true); });
+  dom.inputPhone.addEventListener('input', function(e) { menuData.contact.phone = e.target.value; updateDirty(true); });
+  dom.toggleZalo.addEventListener('change', function(e) { menuData.settings.show_zalo_button = e.target.checked ? 1 : 0; updateDirty(true); });
+  dom.inputZalo.addEventListener('input', function(e) { menuData.contact.zalo = e.target.value; updateDirty(true); });
+  dom.toggleFacebook.addEventListener('change', function(e) { menuData.settings.show_facebook_button = e.target.checked ? 1 : 0; updateDirty(true); });
+  dom.inputFacebook.addEventListener('input', function(e) { menuData.contact.facebook = e.target.value; updateDirty(true); });
+
+  [dom.btnUploadLogo, dom.btnSelectLogoEmpty].forEach(function(btn) { btn.addEventListener('click', function() { dom.fileLogo.click(); }); });
+
+  dom.fileLogo.addEventListener('change', function(e) {
+    var file = e.target.files[0];
+    if (file) {
+      menuData.logo = URL.createObjectURL(file);
+      bindDataToUI();
+      updateDirty(true);
+    }
+  });
+
+  dom.btnRemoveLogo.addEventListener('click', function() {
+    menuData.logo = "";
+    bindDataToUI();
+    updateDirty(true);
+  });
+
+  dom.mobileTabInfo.addEventListener('click', function() {
+    dom.mobileModal.classList.remove('hidden');
+    dom.mobileModal.classList.add('flex');
+    dom.mobileSidebarContent.innerHTML = dom.desktopSidebar.innerHTML;
+    feather.replace();
+  });
+
+  dom.btnCloseMobileModal.addEventListener('click', function() {
+    dom.mobileModal.classList.add('hidden');
+    dom.mobileModal.classList.remove('flex');
+  });
+
+  var handleSave = function() {
+    updateDirty(false);
+    Swal.fire({ icon: 'success', title: 'Đã lưu bản nháp' });
+  };
+  dom.btnSave.addEventListener('click', handleSave);
+  dom.btnSaveMobile.addEventListener('click', handleSave);
+
+  window.initHiwebEditor = function() { fetchMenuData(); feather.replace(); };
+</script>
+
+<script>
+  window.MQE = {
+    token: localStorage.getItem('menuToken'),
+    isLoggedIn: !!localStorage.getItem('menuToken'),
+
+    init: function() {
+      this.setupEvents();
+      this.checkAuth();
+    },
+
+    setupEvents: function() {
+      var loginBtn = document.getElementById('MQE_loginBtn');
+      var overlay = document.getElementById('MQE_overlay');
+      var submitBtn = document.getElementById('MQE_submitLogin');
+      var emailInput = document.getElementById('MQE_email');
+      var passInput = document.getElementById('MQE_pass');
+
+      if (loginBtn) loginBtn.addEventListener('click', function() { window.MQE.showModal(); });
+      if (overlay) overlay.addEventListener('click', function(e) { if (e.target === overlay) window.MQE.hideModal(); });
+      if (submitBtn) submitBtn.addEventListener('click', function() { window.MQE.handleLogin(emailInput.value, passInput.value); });
+      if (passInput) passInput.addEventListener('keypress', function(e) { if (e.key === 'Enter') window.MQE.handleLogin(emailInput.value, passInput.value); });
+    },
+
+    checkAuth: function() {
+      var hasToken = !!localStorage.getItem('menuToken') || !!localStorage.getItem('userToken');
+      if (hasToken) {
+        this.token = localStorage.getItem('menuToken') || localStorage.getItem('userToken');
+        this.isLoggedIn = true;
+        this.showEditor();
+      } else {
+        this.showLoginBtn();
+      }
+    },
+
+    showModal: function() {
+      var o = document.getElementById('MQE_overlay');
+      var e = document.getElementById('MQE_email');
+      if (o) { o.classList.add('active'); if (e) e.focus(); }
+    },
+
+    hideModal: function() {
+      var o = document.getElementById('MQE_overlay');
+      if (o) o.classList.remove('active');
+    },
+
+    handleLogin: async function(email, password) {
+      if (!email || !password) { alert('Vui lòng nhập email và mật khẩu'); return; }
+      var btn = document.getElementById('MQE_submitLogin');
+      if (btn) { btn.disabled = true; btn.textContent = 'Đang đăng nhập...'; }
+      try {
+        var r = await fetch('https://api.hiweb.vn/api/v1/user/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ user_name: email, password: password })
+        });
+        var d = await r.json();
+        if (d.code === 200 && d.Authorization) {
+          this.token = d.Authorization;
+          localStorage.setItem('menuToken', this.token);
+          localStorage.setItem('userToken', this.token);
+          this.isLoggedIn = true;
+          this.hideModal();
+          this.showEditor();
+        } else {
+          alert(d.msg || 'Đăng nhập thất bại');
+        }
+      } catch (err) {
+        console.error('Login error:', err);
+        alert('Lỗi kết nối đến máy chủ. Vui lòng thử lại.');
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Đăng nhập'; }
+      }
+    },
+
+    showLoginBtn: function() {
+      var loginBtn = document.getElementById('MQE_loginBtn');
+      if (loginBtn) loginBtn.style.display = 'flex';
+      var scene = document.querySelector('.scene');
+      if (scene) scene.style.display = '';
+      var editorContainer = document.getElementById('editor-container');
+      if (editorContainer) editorContainer.style.display = 'none';
+      var editorLoading = document.getElementById('loading-overlay');
+      if (editorLoading) editorLoading.style.display = 'none';
+    },
+
+    showEditor: function() {
+      var loginBtn = document.getElementById('MQE_loginBtn');
+      if (loginBtn) loginBtn.style.display = 'none';
+      var scene = document.querySelector('.scene');
+      if (scene) scene.style.display = 'none';
+      var vLoader = document.getElementById('loading');
+      if (vLoader) vLoader.style.display = 'none';
+      var editorLoading = document.getElementById('loading-overlay');
+      if (editorLoading) editorLoading.style.display = 'flex';
+      if (typeof window.initHiwebEditor === 'function') window.initHiwebEditor();
+    },
+
+    logout: function() {
+      localStorage.removeItem('menuToken');
+      this.token = null;
+      this.isLoggedIn = false;
+      this.showLoginBtn();
+    }
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() { window.MQE.init(); });
+  } else {
+    window.MQE.init();
+  }
+</script>
+</body>
+</html>
