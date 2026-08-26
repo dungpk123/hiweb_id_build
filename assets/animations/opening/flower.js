@@ -295,7 +295,8 @@
 
     // 5. Mở main
     setTimeout(() => {
-      document.getElementById("intro").classList.add("away");
+      const intro = shadowRoot.host || document.getElementById("intro");
+      if (intro) intro.classList.add("away");
 
       const main = shadowRoot.getElementById("main");
       if (main) {

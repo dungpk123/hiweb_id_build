@@ -80,6 +80,8 @@ if (window.openingEffectManager) {
      * @param {string} overrideEffectId - ID ép chạy từ Editor (nếu có)
      */
     init(overrideEffectId) {
+      this.cleanup();
+
       const introEl = document.getElementById("intro");
       if (!introEl) {
         console.warn("Opening Effect: #intro not found.");
@@ -87,7 +89,6 @@ if (window.openingEffectManager) {
       }
 
       if (this.isInEditorMode()) {
-        this.cleanup();
         return;
       }
 
@@ -98,7 +99,6 @@ if (window.openingEffectManager) {
         urlParams.get("opening_effect");
 
       if (!effectId || effectId === "none") {
-        this.cleanup();
         return;
       }
 
@@ -291,8 +291,17 @@ if (window.openingEffectManager) {
     }
 
     cleanup() {
+      if (this._finishTimer) {
+        clearTimeout(this._finishTimer);
+        this._finishTimer = null;
+      }
+      if (this._introObs) {
+        this._introObs.disconnect();
+        this._introObs = null;
+      }
+
       // Clear shadow DOM completely
-      const introEl = this.shadowRoot?.host || document.getElementById("intro");
+      const introEl = this._introEl || this.shadowRoot?.host || document.getElementById("intro");
       if (this.shadowRoot) {
         this.shadowRoot.innerHTML = "";
         try {
@@ -316,14 +325,6 @@ if (window.openingEffectManager) {
       // Remove old scripts
       const script = document.querySelector(`script[data-opening-script]`);
       if (script) script.remove();
-
-      // Cancel any pending animations
-      if (this.currentEffect) {
-        const children = this.shadowRoot?.querySelectorAll("*") || [];
-        children.forEach((el) => {
-          el.style.animation = "none";
-        });
-      }
 
       // Clear effect data
       delete window.__openingEffectData;

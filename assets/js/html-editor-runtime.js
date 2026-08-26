@@ -5111,6 +5111,13 @@
                     el.href = searchUrl;
                     console.log('[UPDATE_MAP_ADDRESS] Updated link href to:', searchUrl);
                 });
+
+                const mapFrames = document.querySelectorAll(`iframe[data-edit-map="${id}"]`);
+                const iframeUrl = `https://www.google.com/maps?q=${encodeURIComponent(address)}&output=embed`;
+                mapFrames.forEach(el => {
+                    el.src = iframeUrl;
+                    console.log('[UPDATE_MAP_ADDRESS] Updated iframe src to:', iframeUrl);
+                });
             }
         }
     });

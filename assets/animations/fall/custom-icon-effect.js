@@ -74,12 +74,12 @@
   var generationInterval = null;
   var pendingTimeouts = [];
 
-  function createCustomParticle(iconOverride) {
+  function createCustomParticle(iconOverride, isInstant) {
     var particle = document.createElement("div");
     particle.className = "fall-particle custom-icon";
 
     var left = Math.random() * 100;
-    var delay = Math.random() * 2;
+    var delay = isInstant ? 0 : Math.random() * 1.5;
     var duration = effectConfig.speed || 9 + Math.random() * 4;
     var flutterDuration = 3 + Math.random() * 2;
 
@@ -133,7 +133,7 @@
     var roundCount = Math.max(1, Math.floor(particleCount / iconPool.length));
     for (var round = 0; round < roundCount; round++) {
       for (var i = 0; i < iconPool.length; i++) {
-        createCustomParticle(iconPool[i]);
+        createCustomParticle(iconPool[i], true);
       }
     }
 
